@@ -1,0 +1,18 @@
+#settings file
+#everything is in ms, so 1000 ms = 1 s
+
+#contactserver = server,gossipPort
+contactserver=localhost,6665
+timeFail=2000
+timeGossip=500
+timeUpdateHeartbeat=500
+timeUpdateList=900
+
+#shard size in bytes
+#1048576 = 1MB
+shardsize=1048576
+replicationfactor=2
+
+#servers needs 3 items
+#ipaddress,gossipPort,fileOperationsPort
+servers=localhost,6665,6666;localhost,6667,6668;localhost,6669,6670;localhost,6671,6672;

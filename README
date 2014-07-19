@@ -1,0 +1,74 @@
+Need Java 1.7 or higher to run.  Developed using Java 1.8
+Steps to run Distributed File System locally:
+1. Update settings.prop with the contact server and the contact server gossip port.
+	-Update settings.prop for all servers in the cluster.  Needs the hostname, gossipPort, and fileOperationsPort.
+	-Can set replicationfactor and shardsize too.
+2. Move DFS.jar and settings.prop to the folders you want to run the servers from.  
+	-Note: the file operations will put, get, and delete files from the same folder as the jar.
+3. Issue command to start server:
+	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer <gossipPort> <fileOperationsPort> <isContact>
+	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer 6665 6666 true
+	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer 6667 6668 false
+	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer 6669 6670 false
+	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer 6671 6672 false
+4. Copy DFS.jar and settings.prop to the folder you wish to run the client on. 
+5. Create a folder (or copy it) in the client folder called FromDFS.  This will store results from the get operations.
+6. Run the client using this:
+	-java -cp DFS.jar com.kleck.DistributedFileSystem.DFSClient
+7. Following commands are enable:
+	-put <localfilename> <sdfsfilename>
+	-get <sdfsfilename> <localfilename>
+	-delete <sdfsfilename>
+-Steps to run remotely should be the same however, this will not run on the EWS since it only has Java 1.6.
+
+Other Helpful Commands:
+print - issue 'print' to the server and you will get its current membership list
+stop - issue 'stop' to the server to mimic the server leaving (closes connections too)
+quit - issue 'quit' to the client to leave the sdfs> promptm
+
+
+
+Tips for querying logs:
+Log Filenames are serverOuptut.log
+
+Each line in a log starts with the processID that is writing to the log.
+Then a join/leave/fail/get/put/delete message and if applicable the processID that was detected as joining/failing/leaving
+or the file that was operated upon.
+
+The best way to query the logs is to use a command like this.
+	grep "#ADDED_TO_LIST_JOIN#" serverOutput.log
+Here are the keywords to search for:
+	#ADDED_TO_LIST_JOIN# = Process detected as joined and has been added to the given process. 
+	#REMOVED_LEFT_VOLUNTARILY# = Process has been determined to have left voluntarily (user stopped process).
+		-#CONTACT_LEFT_VOLUNTARILY#
+	#REMOVED_FAILED_PROCESS# = Process has crashed/timeout.
+		-#REMOVED_FAILED_CONTACT#
+	#PUT_FILE# = process put the file indicated
+	#GET_FILE# = process retrieved the file
+	#DELETE_FILE# = process deleted the file
+	
+
+
+Creating And Running A Logging Server:
+1.  Copy the jar file DistributedLogging.jar and servers.prop to the same folder on the server you wish to setup.
+2.  cd into this folder and start a server using the following template:
+		java -cp DistributedLogging.jar com.kleck.DistributedLogging.LoggingServer <portNumber> <serverId>
+		Examples:
+			java -cp DistributedLogging.jar com.kleck.DistributedLogging.LoggingServer 6675 0
+			java -cp DistributedLogging.jar com.kleck.DistributedLogging.LoggingServer 6676 1
+			java -cp DistributedLogging.jar com.kleck.DistributedLogging.LoggingServer 6677 2
+
+
+
+Starting the Client:
+1.  Copy the jar file DistributedLogging.jar and servers.prop to the same folder on the client machine.
+2.  cd into this folder
+3.  Ensure that all servers have been added to the servers.prop file.
+4.  Start the client using this:
+		java -cp DistributedLogging.jar com.kleck.DistributedLogging.LoggingClient
+5.  Issue a grep command and the Client will display the output from each server.  
+		-A good test to make sure the Client is running is to issue the 'pwd' command.
+		-type in 'exit' when you are done and the Client will close gracefully
+NOTE: If you are running a Unit Test the server output will be written to a file "serverResponse_<hostname>_<port>.out"
+
+
