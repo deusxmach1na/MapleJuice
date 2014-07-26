@@ -19,7 +19,7 @@ public class MasterMapleJuiceServerProtocol {
 		//master processes input
 		//need to get the first x bytes of data for the command
 		this.command = new String(Arrays.copyOfRange(data, 0, 16)).trim();
-
+		//System.out.println(command);
 		
 		//System.out.println(command);
 		//System.out.println(isFirst);
@@ -38,8 +38,14 @@ public class MasterMapleJuiceServerProtocol {
 		}
 		else if(command.trim().equals("maple")) {
 			//get command options and send to master maple processor
-			this.commandOptions = new String(Arrays.copyOfRange(data, 0, data.length)).trim();
-			result = this.processMapleMaster();
+			if(this.fs.getGs().getMembershipList().getMaster().equals(this.fs.getGs().getProcessId())) {
+				this.commandOptions = new String(Arrays.copyOfRange(data, 0, data.length)).trim();
+				//System.out.println("Im here");
+				result = this.processMapleMaster();
+			}
+			else {
+				result = "Not the master".getBytes();
+			}
 		}
 		else if(command.trim().equals("juice")) {
 			//get command options and send to master juice processor
@@ -56,14 +62,15 @@ public class MasterMapleJuiceServerProtocol {
 		List<String> options = this.parseCommandOptions(this.commandOptions);
 		List<DFSClientThread> mapleThreads = new ArrayList<DFSClientThread>();
 		
+		//System.out.println("Options size" + options.size());
 		//first option is the jar file
-		String jarFile = options.get(0);
+		String jarFile = options.get(1);
 		
 		//2nd option is the file prefix
-		String prefix = options.get(1);
+		String prefix = options.get(2);
 		
 		//rest of the options are what we need to run maple on
-		for(int i=2;i<options.size();i++) {
+		for(int i=3;i<options.size();i++) {
 			//choose a maple worker and tell it to start
 
 			//send the command to a random server
@@ -72,7 +79,7 @@ public class MasterMapleJuiceServerProtocol {
 			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(options.get(i))).getPortNumber();
 			
 			mapleThreads.add(new DFSClientThread(ipAddress, portNumber, "maple none", command));
-			mapleThreads.get(i-2).start();
+			mapleThreads.get(i-3).start();
 		}
 		
 		//wait for processes to finish and see if they finished correctly
@@ -100,7 +107,8 @@ public class MasterMapleJuiceServerProtocol {
 	
 	//parse the command options
 	private List<String> parseCommandOptions(String commandOptions) {
-		return Arrays.asList(commandOptions.split("\\s*,\\s*"));
+		//System.out.println(commandOptions);
+		return Arrays.asList(commandOptions.split(" "));
 	}
 	
 	//turns the command into a byte array

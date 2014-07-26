@@ -14,10 +14,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
-public class DFSClient {
+public class MapleClient {
 	private Properties prop;
 	
-	public DFSClient() { 
+	public MapleClient() { 
 		this.prop = loadParams();
 		runClient();
 	}
@@ -40,7 +40,7 @@ public class DFSClient {
 				
 			
 			//get user input
-			if(command.split(" ").length > 3 || command.split(" ").length < 2) {
+			if(command.split(" ").length < 2) {
 				System.out.println("Invalid command");
 				this.printUsage();
 			}
@@ -62,7 +62,7 @@ public class DFSClient {
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
-						spinUpThreads(this.formCommand("put", command.split(" ")[2], true, data), "put none");
+						spinUpThreads(this.formFSCommand("put", command.split(" ")[2], true, data), "put none");
 						//long commandEnd = System.currentTimeMillis();
 						//System.out.println("*********************");
 						//System.out.println("**Put Time = " + (commandEnd - commandStart) + " milliseconds.");
@@ -77,7 +77,7 @@ public class DFSClient {
 				}
 				else {
 					//long commandStart = System.currentTimeMillis();
-					spinUpThreads(this.formCommand("get", command.split(" ")[1], true, "".getBytes()), "get " + command.split(" ")[2]);
+					spinUpThreads(this.formFSCommand("get", command.split(" ")[1], true, "".getBytes()), "get " + command.split(" ")[2]);
 					//long commandEnd = System.currentTimeMillis();
 					//System.out.println("*********************");
 					//System.out.println("**Get Time = " + (commandEnd - commandStart) + " milliseconds.");
@@ -85,13 +85,19 @@ public class DFSClient {
 				}
 			}
 			else if(command.split(" ")[0].equals("delete")) {
-				spinUpThreads(this.formCommand("del", command.split(" ")[1], true, "".getBytes()), "del none");
+				spinUpThreads(this.formFSCommand("del", command.split(" ")[1], true, "".getBytes()), "del none");
+			}
+			
+			//maple juice commands
+			else if(command.split(" ")[0].equals("maple")) {
+				//System.out.println("maple sent");
+				spinUpThreads(this.formMJCommand("maple", command), "maple master");
 			}
 		}	
 	}
 	
 	//turns the command into a byte array
-	public byte[] formCommand(String commandType, String filename, boolean b, byte[] data) {
+	public byte[] formFSCommand(String commandType, String filename, boolean b, byte[] data) {
 		byte[] result = new byte[data.length + 64];
 		byte[] com = new byte[16];
 		com = Arrays.copyOf(commandType.getBytes(), 16);
@@ -114,6 +120,20 @@ public class DFSClient {
 		return result;
 	}
 	
+
+	//turns the command into a byte array
+	public byte[] formMJCommand(String commandType, String command) {
+		byte[] com = new byte[16];
+		com = Arrays.copyOf(commandType.getBytes(), 16);
+		byte[] commandByte = command.getBytes();
+		byte[] result = new byte[16 + commandByte.length];
+		
+		//System.out.println(file.length);
+		System.arraycopy(com, 0, result, 0, 16);
+		System.arraycopy(commandByte, 0, result, 16, commandByte.length);
+		return result;
+	}
+	
 	private void spinUpThreads (byte[] bs, String command) {
 		List<DFSClientThread> sends = new ArrayList<DFSClientThread>();
 		String[] hosts = prop.getProperty("servers").split(";");
@@ -127,6 +147,7 @@ public class DFSClient {
 	    		int portNumber = Integer.parseInt(host[2]);
 	    		sends.add(new DFSClientThread(ipAddress, portNumber, command, bs));
 	            sends.get(i).start();	
+	            //System.out.println("sent command " + command);
 	    	}
 	    }	        
 	    
@@ -142,7 +163,7 @@ public class DFSClient {
 	
 	//main
 	public static void main(String[] args) {
-		new DFSClient();
+		new MapleClient();
 	}
 	
 	//see if file is valid
@@ -176,6 +197,8 @@ public class DFSClient {
 		System.out.println("put <localfilename> <sdfsfilename>");
 		System.out.println("get <sdfsfilename> <localfilename>");
 		System.out.println("delete <sdfsfilename>");
+		System.out.println("maple <maple.jar> <intermediate_prefix> <source_file_1> ... <source_file_m>");
+		System.out.println("juice <juice.jar> <num_juices> <intermediate_prefix> <dest_filename>");
 	}
 	
 	//concate bytes

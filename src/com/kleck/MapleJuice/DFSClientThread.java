@@ -33,8 +33,9 @@ public class DFSClientThread extends Thread {
 		//open a socket to the server and send data
 		try {
 			//get the user command (put, get, delete)		
-			if(this.commandType.equals("put") || this.commandType.equals("del") || this.commandType.equals("reb")) {
-				//System.out.println("issuing put to server");
+			if(this.commandType.equals("put") || this.commandType.equals("del") 
+					|| this.commandType.equals("reb") || this.commandType.equals("maple")) {
+				//System.out.println("issuing " + commandType + " to server");
 				getServerResponse();
 			}
 			else if(this.commandType.equals("get")) {

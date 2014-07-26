@@ -44,8 +44,8 @@ public class FSServerThread extends Thread {
 		    
 		    //System.out.println("here");
 			//get client input and send to LoggingServerProtocol
-		    FileServerProtocol fsp = new FileServerProtocol();
-		    byte[] outputToClient = fsp.processInput(data, this.fs);
+		    MasterMapleJuiceServerProtocol mmsp = new MasterMapleJuiceServerProtocol();
+		    byte[] outputToClient = mmsp.processInput(data, this.fs);
 		    
 			dos.writeInt(outputToClient.length);
 			dos.write(outputToClient);

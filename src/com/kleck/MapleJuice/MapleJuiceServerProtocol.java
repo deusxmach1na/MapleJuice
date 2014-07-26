@@ -77,6 +77,7 @@ public class MapleJuiceServerProtocol {
 	
 	//mapler
 	public byte[] processMaple() {
+		System.out.println("Maple Worker started");
 		//byte[] result = "".getBytes();
 		//1 maple task per filename
 		//need to get the files from the master if it doesn't exist in order to do the maple
