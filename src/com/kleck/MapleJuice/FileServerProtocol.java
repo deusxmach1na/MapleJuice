@@ -350,14 +350,11 @@ public class FileServerProtocol {
 		byte[] result;
 		if(a == null) {
 			result = new byte[b.length];
-			// copy b to result
 			System.arraycopy(b, 0, result, 0, b.length);
 		}
 		else {
 			result = new byte[a.length + b.length];
-			// copy a to result
 			System.arraycopy(a, 0, result, 0, a.length);
-			// copy b to result
 			System.arraycopy(b, 0, result, a.length, b.length);
 		}
 		return result;

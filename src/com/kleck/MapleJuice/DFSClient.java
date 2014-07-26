@@ -77,7 +77,7 @@ public class DFSClient {
 				}
 				else {
 					//long commandStart = System.currentTimeMillis();
-					spinUpThreads(this.formCommand("get", command.split(" ")[1], true, new String("").getBytes()), "get " + command.split(" ")[2]);
+					spinUpThreads(this.formCommand("get", command.split(" ")[1], true, "".getBytes()), "get " + command.split(" ")[2]);
 					//long commandEnd = System.currentTimeMillis();
 					//System.out.println("*********************");
 					//System.out.println("**Get Time = " + (commandEnd - commandStart) + " milliseconds.");
@@ -85,7 +85,7 @@ public class DFSClient {
 				}
 			}
 			else if(command.split(" ")[0].equals("delete")) {
-				spinUpThreads(this.formCommand("del", command.split(" ")[1], true, new String("").getBytes()), "del none");
+				spinUpThreads(this.formCommand("del", command.split(" ")[1], true, "".getBytes()), "del none");
 			}
 		}	
 	}
@@ -99,9 +99,9 @@ public class DFSClient {
 		file = Arrays.copyOf(filename.getBytes(), 32);
 		byte[] isFirst = new byte[16];
 		if(b)
-			isFirst = Arrays.copyOf(new String("true").getBytes(), 16);
+			isFirst = Arrays.copyOf("true".getBytes(), 16);
 		else
-			isFirst = Arrays.copyOf(new String("false").getBytes(), 16);
+			isFirst = Arrays.copyOf("false".getBytes(), 16);
 		
 		//System.out.println(file.length);
 		System.arraycopy(com, 0, result, 0, 16);
@@ -178,19 +178,16 @@ public class DFSClient {
 		System.out.println("delete <sdfsfilename>");
 	}
 	
-	//concat bytes
+	//concate bytes
 	public byte[] concatenateByte (byte[] a, byte[] b) {
 		byte[] result;
 		if(a == null) {
 			result = new byte[b.length];
-			// copy b to result
 			System.arraycopy(b, 0, result, 0, b.length);
 		}
 		else {
 			result = new byte[a.length + b.length];
-			// copy a to result
 			System.arraycopy(a, 0, result, 0, a.length);
-			// copy b to result
 			System.arraycopy(b, 0, result, a.length, b.length);
 		}
 		return result;

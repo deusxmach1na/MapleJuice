@@ -51,9 +51,8 @@ public class GossipListenThread extends Thread {
 					e.printStackTrace();
 				}
 				
-				//needs to be able to take 2 inputs
+				//needs to be able to take 1 inputs
 				//1.  membership list
-				//2.  file operation message
 				if(temp instanceof MembershipList) {
 					MembershipList ml = (MembershipList) temp;				
 					//spin up a new thread to merge the two lists
@@ -61,20 +60,6 @@ public class GossipListenThread extends Thread {
 					//System.out.println(this.gs.getMembershipList().toString());
 					mmlt.start();
 				}
-				/*
-				if(temp instanceof ElectionMessage) {
-					ElectionMessage em = (ElectionMessage) temp;
-					HandleElectionMessageThread hemt = new HandleElectionMessageThread(em, this.gs);
-					hemt.start();
-					//System.out.println("here");
-				}
-				*/
-				//System.out.println("RECEIVED: " +  ml.toString());
-				//else if(temp instanceof ElectionMessage) {
-					
-				//}
-
-
 
 			}      	
 			catch(SocketException e) {
