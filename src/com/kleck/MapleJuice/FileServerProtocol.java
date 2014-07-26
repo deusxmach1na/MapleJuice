@@ -401,7 +401,9 @@ public class FileServerProtocol {
 		for(int i=0;i<listOfFiles.length;i++) {
 			//get a list of all files
 			//if it has PART_ in it then see how many times it's replicated
-			if(listOfFiles[i].isFile() && listOfFiles[i].toString().contains("PART_")) {
+			if(listOfFiles[i].isFile() && (listOfFiles[i].toString().contains("PART_") ||
+											listOfFiles[i].toString().contains("MAPCOMPLETE_") ||
+											listOfFiles[i].toString().contains("JUICOMPLETE_"))) {
 				//turn it into a byte array
 				Path path = Paths.get(listOfFiles[i].toString());
 				byte[] file = null;
