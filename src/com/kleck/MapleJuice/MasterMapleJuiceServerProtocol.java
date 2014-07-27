@@ -36,23 +36,31 @@ public class MasterMapleJuiceServerProtocol {
 		else if(command.trim().equals("reb")) {
 			result = new FileServerProtocol().processInput(data, fs);
 		}
-		else if(command.trim().equals("maple")) {
+		else if(command.trim().equals("maple none")) {
+			//System.out.println("maple worker started");
+			result = new MapleJuiceServerProtocol().processInput(data, fs);
+		}
+		else if(command.trim().equals("juice none")) {
+			//System.out.println("juice worker started");
+			result = new MapleJuiceServerProtocol().processInput(data, fs);
+		}
+		else if(command.trim().equals("maple master")) {
 			//get command options and send to master maple processor
 			if(this.fs.getGs().getMembershipList().getMaster().equals(this.fs.getGs().getProcessId())) {
 				this.commandOptions = new String(Arrays.copyOfRange(data, 0, data.length)).trim();
 				//System.out.println("Im here");
 				result = this.processMapleMaster();
 			}
+			//handle master failure here
 			else {
 				result = "Not the master".getBytes();
 			}
 		}
-		else if(command.trim().equals("juice")) {
+		else if(command.trim().equals("juice master")) {
 			//get command options and send to master juice processor
 			this.commandOptions = new String(Arrays.copyOfRange(data, 0, data.length)).trim();	
 			result = this.processJuiceMaster();
 		}
-		
 		
 		return result;
 	}
@@ -64,22 +72,26 @@ public class MasterMapleJuiceServerProtocol {
 		
 		//System.out.println("Options size" + options.size());
 		//first option is the jar file
-		String jarFile = options.get(1);
+		//for(int i=0;i<options.size();i++) {
+		//	System.out.println(options.get(i));
+		//System.out.println("param size = " + options.size());
+		//}
+		String jarFile = options.get(2);
 		
 		//2nd option is the file prefix
-		String prefix = options.get(2);
+		String prefix = options.get(3);
 		
 		//rest of the options are what we need to run maple on
-		for(int i=3;i<options.size();i++) {
+		for(int i=0;i<options.size()-4;i++) {
 			//choose a maple worker and tell it to start
 
 			//send the command to a random server
-			byte[] command = this.formMJCommand("maple", jarFile, options.get(i), prefix);
-			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(options.get(i))).getIpAddress();
-			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(options.get(i))).getPortNumber();
-			
+			byte[] command = this.formMJCommand("maple none", jarFile, options.get(i + 4), prefix);
+			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(options.get(i + 4))).getIpAddress();
+			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(options.get(i + 4))).getFilePortNumber();
+			//System.out.println("master sending maple command to worker" + portNumber);
 			mapleThreads.add(new DFSClientThread(ipAddress, portNumber, "maple none", command));
-			mapleThreads.get(i-3).start();
+			mapleThreads.get(i).start();
 		}
 		
 		//wait for processes to finish and see if they finished correctly
@@ -113,11 +125,11 @@ public class MasterMapleJuiceServerProtocol {
 	
 	//turns the command into a byte array
 	public byte[] formFileCommand(String commandType, String filename, boolean b, byte[] data) {
-		byte[] result = new byte[data.length + 64];
+		byte[] result = new byte[data.length + 128];
 		byte[] com = new byte[16];
 		com = Arrays.copyOf(commandType.getBytes(), 16);
-		byte[] file = new byte[32];
-		file = Arrays.copyOf(filename.getBytes(), 32);
+		byte[] file = new byte[96];
+		file = Arrays.copyOf(filename.getBytes(), 96);
 		byte[] isFirst = new byte[16];
 		if(b)
 			isFirst = Arrays.copyOf("true".getBytes(), 16);
@@ -127,8 +139,8 @@ public class MasterMapleJuiceServerProtocol {
 		//System.out.println(file.length);
 		System.arraycopy(com, 0, result, 0, 16);
 		System.arraycopy(isFirst, 0, result, 16, 16);
-		System.arraycopy(file, 0, result, 32, 32);
-		System.arraycopy(data, 0, result, 64, data.length);
+		System.arraycopy(file, 0, result, 32, 96);
+		System.arraycopy(data, 0, result, 128, data.length);
 		//result = this.concatenateByte(com, file);
 		//result = this.concatenateByte(result, isFirst);
 		//result = this.concatenateByte(result, data);
@@ -145,7 +157,7 @@ public class MasterMapleJuiceServerProtocol {
 		byte[] filenameByte = new byte[200];
 		filenameByte = Arrays.copyOf(filename.getBytes(), 200);
 		byte[] interFileByte = new byte[200];
-		filenameByte = Arrays.copyOf(interFile.getBytes(), 200);
+		interFileByte = Arrays.copyOf(interFile.getBytes(), 200);
 		
 		//System.out.println(file.length);
 		System.arraycopy(com, 0, result, 0, 16);

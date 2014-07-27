@@ -30,13 +30,13 @@ public class FileServerProtocol {
 	public byte[] processInput(byte[] data, FSServer fs) {
 		this.fs = fs;
 		byte[] result = null;
-		this.header = Arrays.copyOfRange(data, 0, 64);
-		this.filedata = Arrays.copyOfRange(data, 64, data.length);
+		this.header = Arrays.copyOfRange(data, 0, 128);
+		this.filedata = Arrays.copyOfRange(data, 128, data.length);
 		
 		//need to get the first x bytes of data for the command
 		this.command = new String(Arrays.copyOfRange(header, 0, 16)).trim();
 		this.isFirst = new Boolean(new String(Arrays.copyOfRange(header, 16, 32)).trim());
-		this.filename = new String(Arrays.copyOfRange(header, 32, 64)).trim();
+		this.filename = new String(Arrays.copyOfRange(header, 32, 128)).trim();
 		
 		//System.out.println(command);
 		//System.out.println(isFirst);
@@ -363,11 +363,11 @@ public class FileServerProtocol {
 	
 	//turns the command into a byte array
 	public static byte[] formCommand(String commandType, String filename, boolean b, byte[] data) {
-		byte[] result = new byte[data.length + 64];
+		byte[] result = new byte[data.length + 128];
 		byte[] com = new byte[16];
 		com = Arrays.copyOf(commandType.getBytes(), 16);
-		byte[] file = new byte[32];
-		file = Arrays.copyOf(filename.getBytes(), 32);
+		byte[] file = new byte[96];
+		file = Arrays.copyOf(filename.getBytes(), 96);
 		byte[] isFirst = new byte[16];
 		if(b)
 			isFirst = Arrays.copyOf("true".getBytes(), 16);
@@ -377,8 +377,8 @@ public class FileServerProtocol {
 		//System.out.println(file.length);
 		System.arraycopy(com, 0, result, 0, 16);
 		System.arraycopy(isFirst, 0, result, 16, 16);
-		System.arraycopy(file, 0, result, 32, 32);
-		System.arraycopy(data, 0, result, 64, data.length);
+		System.arraycopy(file, 0, result, 32, 96);
+		System.arraycopy(data, 0, result, 128, data.length);
 		//result = this.concatenateByte(com, file);
 		//result = this.concatenateByte(result, isFirst);
 		//result = this.concatenateByte(result, data);

@@ -91,18 +91,18 @@ public class MapleClient {
 			//maple juice commands
 			else if(command.split(" ")[0].equals("maple")) {
 				//System.out.println("maple sent");
-				spinUpThreads(this.formMJCommand("maple", command), "maple master");
+				spinUpThreads(this.formMJCommand("maple master", command), "maple master");
 			}
 		}	
 	}
 	
 	//turns the command into a byte array
 	public byte[] formFSCommand(String commandType, String filename, boolean b, byte[] data) {
-		byte[] result = new byte[data.length + 64];
+		byte[] result = new byte[data.length + 128];
 		byte[] com = new byte[16];
 		com = Arrays.copyOf(commandType.getBytes(), 16);
-		byte[] file = new byte[32];
-		file = Arrays.copyOf(filename.getBytes(), 32);
+		byte[] file = new byte[96];
+		file = Arrays.copyOf(filename.getBytes(), 96);
 		byte[] isFirst = new byte[16];
 		if(b)
 			isFirst = Arrays.copyOf("true".getBytes(), 16);
@@ -112,8 +112,8 @@ public class MapleClient {
 		//System.out.println(file.length);
 		System.arraycopy(com, 0, result, 0, 16);
 		System.arraycopy(isFirst, 0, result, 16, 16);
-		System.arraycopy(file, 0, result, 32, 32);
-		System.arraycopy(data, 0, result, 64, data.length);
+		System.arraycopy(file, 0, result, 32, 96);
+		System.arraycopy(data, 0, result, 128, data.length);
 		//result = this.concatenateByte(com, file);
 		//result = this.concatenateByte(result, isFirst);
 		//result = this.concatenateByte(result, data);

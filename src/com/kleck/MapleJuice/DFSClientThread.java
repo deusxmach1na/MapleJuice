@@ -64,6 +64,7 @@ public class DFSClientThread extends Thread {
 	
 	//opens a socket to the server and sends the command 
 	private byte[] getServerResponse() throws UnknownHostException, IOException {
+		//System.out.println(this.commandType);
 		Socket dlSocket = new Socket(this.ipAddress, this.portNumber);
 		OutputStream out = dlSocket.getOutputStream();
 		DataOutputStream dos = new DataOutputStream(out);

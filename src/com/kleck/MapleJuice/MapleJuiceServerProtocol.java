@@ -55,15 +55,17 @@ public class MapleJuiceServerProtocol {
 		else if(command.trim().equals("reb")) {
 			result = new FileServerProtocol().processInput(data, fs);
 		}
-		else if(command.trim().equals("maple")) {
+		else if(command.trim().equals("maple none")) {
 			//if you are not the master just do what the master says
+			//System.out.println("maple worker received");
 			this.header = Arrays.copyOfRange(data, 0, 512);
 			this.jarFile = new String(Arrays.copyOfRange(header, 16, 112)).trim();
 			this.filename = new String(Arrays.copyOfRange(header, 112, 312)).trim();
 			this.interFile = new String(Arrays.copyOfRange(header, 312, 512)).trim();
+			//System.out.println(jarFile + filename + interFile);
 			result = this.processMaple();
 		}
-		else if(command.trim().equals("juice")) {
+		else if(command.trim().equals("juice none")) {
 			//if you are not the master just do what the master says
 			this.header = Arrays.copyOfRange(data, 0, 512);
 			this.jarFile = new String(Arrays.copyOfRange(header, 16, 112)).trim();
@@ -84,12 +86,16 @@ public class MapleJuiceServerProtocol {
 		this.getFileFromMaster(this.jarFile);
 		//get the file we will maple on
 		this.getFileFromMaster(this.filename);
-
+		System.out.println("Maple exec = " + this.jarFile);
+		System.out.println("Filename to maple = " + this.filename);
+		System.out.println("intermediate file prefix = " + this.interFile);
 		//got the files now execute the maple
 		ConcurrentMap<String, PrintWriter> pw = new ConcurrentHashMap<String, PrintWriter>();
-		List<String> filenames = new ArrayList<String>();   //is this needed?
+		List<String> filenames = new ArrayList<String>();  
 		try {
+			//Process proc=Runtime.getRuntime().exec(new String[]{"java","-jar","Maple.jar","wordcount.txt"});
 			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.filename);
+			//proc.waitFor();
 			BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
 			BufferedReader err = new BufferedReader(new InputStreamReader(proc.getErrorStream()));
 			String s;
@@ -107,6 +113,7 @@ public class MapleJuiceServerProtocol {
             }
             while ((s = err.readLine()) != null) {
                 System.out.println(s);
+                System.out.println("***jar file did not work***");
             }
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -121,7 +128,7 @@ public class MapleJuiceServerProtocol {
 			File target = new File("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
 			copyMe.renameTo(target);
 			//put the files onto the master
-			this.putFileOnMaster(filename);
+			this.putFileOnMaster("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
 		}
 		
 		return "Maple Complete".getBytes();
@@ -172,7 +179,7 @@ public class MapleJuiceServerProtocol {
 			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getFilePortNumber();
 			//save the file
 			try {
-				FileOutputStream fos = new FileOutputStream(this.jarFile);
+				FileOutputStream fos = new FileOutputStream(filename);
 				fos.write(this.getServerResponse(ipAddress, portNumber, command));
 				fos.close();
 			} catch (UnknownHostException e) {
