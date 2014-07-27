@@ -11,6 +11,7 @@ import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 
 public class DFSClientThread extends Thread {
 	private String ipAddress;
@@ -18,7 +19,7 @@ public class DFSClientThread extends Thread {
 	private String commandType;
 	private byte[] data;
 	private String fileToSaveAs;
-	
+	private String serverResponse;
 	
 	public DFSClientThread(String ipAddress, int portNumber, String command, byte[] data) {
 		this.ipAddress = ipAddress;
@@ -29,14 +30,13 @@ public class DFSClientThread extends Thread {
 	}
 
 	public void run() {		
-		
 		//open a socket to the server and send data
 		try {
 			//get the user command (put, get, delete)		
 			if(this.commandType.equals("put") || this.commandType.equals("del") 
 					|| this.commandType.equals("reb") || this.commandType.equals("maple")) {
 				//System.out.println("issuing " + commandType + " to server");
-				getServerResponse();
+				this.setServerResponse(getServerResponse());
 			}
 			else if(this.commandType.equals("get")) {
 				//save the file
@@ -44,12 +44,22 @@ public class DFSClientThread extends Thread {
 				fos.write(this.getServerResponse());
 				fos.close();
 			}
+			else if(this.commandType.equals("getserv")) {
+				//save the file
+				//System.out.println(this.fileToSaveAs);
+				FileOutputStream fos = new FileOutputStream(this.fileToSaveAs);
+				//System.out.println("server says" + this.getServerResponse());
+				fos.write(this.getServerResponse());
+				fos.close();
+			}
 		} catch (ConnectException e) {
+			this.setServerResponse("ConnectionException".getBytes());
 			//issue connecting to server assume it failed
 			//e.printStackTrace();	
 			Thread.currentThread().interrupt();
 			return;	
 		} catch (EOFException e) {
+			this.setServerResponse("IOException".getBytes());
 			//issue connecting to server assume it failed
 			//e.printStackTrace();	
 			//if(this.commandType.equals("get")) {
@@ -82,5 +92,15 @@ public class DFSClientThread extends Thread {
 		//System.out.println(new String(data));
 		dlSocket.close();
 		return result;
+	}
+	
+	//set the server response for the thread
+	//used in maple tasks to get completed file names
+	private void setServerResponse(byte[] input) {
+		this.serverResponse = new String(Arrays.copyOfRange(input, 0, input.length)).trim();
+	}
+	
+	public String getResponse() {
+		return this.serverResponse;
 	}
 }

@@ -46,7 +46,7 @@ public class MapleJuiceServerProtocol {
 		if(command.trim().equals("put")) {
 			result = new FileServerProtocol().processInput(data, fs);
 		}
-		else if(command.trim().equals("get")) {
+		else if(command.trim().equals("get") || command.trim().equals("getserv")) {
 			result = new FileServerProtocol().processInput(data, fs);
 		}
 		else if(command.trim().equals("del")) {
@@ -79,6 +79,8 @@ public class MapleJuiceServerProtocol {
 	
 	//mapler
 	public byte[] processMaple() {
+		byte[] result = "".getBytes();
+		boolean processingError = false;
 		System.out.println("Maple Worker started");
 		//byte[] result = "".getBytes();
 		//1 maple task per filename
@@ -113,35 +115,44 @@ public class MapleJuiceServerProtocol {
             }
             while ((s = err.readLine()) != null) {
                 System.out.println(s);
-                System.out.println("***jar file did not work***");
+                result = "ERROR: JARfailed".getBytes();
+                processingError = true;
+                //System.out.println("***jar file did not work***");
             }
 		} catch (IOException e) {
+			result = "ERROR: IOException".getBytes();
+			processingError = true;
 			e.printStackTrace();
 		}
 		
 		//we are done so rename files accordingly so everyone knows this is done
+		//close print writers
 		for(String key: pw.keySet()) {
 			pw.get(key).close();
 		}
 		
-		//put them on the master
-		for(int i=0;i<filenames.size();i++) {
-			File copyMe = new File(filenames.get(i));
-			File target = new File("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
-			copyMe.renameTo(target);
-			//put the files onto the master
-			this.putFileOnMaster("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
+		if(!processingError) {
+			//put them on the dfs
+			for(int i=0;i<filenames.size();i++) {
+				File copyMe = new File(filenames.get(i));
+				File target = new File("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
+				copyMe.renameTo(target);
+				result = this.concatenateByte(result, (" MAPCOMPLETE_" + "_DELIM_" + filenames.get(i)).getBytes());
+				//put the files onto the dfs
+				this.putFileOnDFS("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
+				//done now delete the files
+				copyMe.delete();
+				target.delete();
+			}
 		}
 		
-		//rebalance the system too
-		this.fs.getGs().replicateFiles("");
-		
-		return "Maple Complete".getBytes();
+		return result;
 	}
 	
 	
 	//juicer
 	public byte[] processJuice() {
+		byte[] result;
 		//get the files we need
 		this.getFileFromMaster(this.jarFile);
 		this.getFileFromMaster(this.filename);
@@ -172,7 +183,9 @@ public class MapleJuiceServerProtocol {
 		File copyMe = new File(newFile);
 		File target = new File("JUICOMPLETE_" + "_DELIM_" + newFile);
 		copyMe.renameTo(target);
-		return "Juice Complete".getBytes();
+		
+		result = "Juice Complete".getBytes();
+		return result;
 		
 	}
 	
@@ -238,6 +251,39 @@ public class MapleJuiceServerProtocol {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+		return result;
+	}
+	
+	//put the file directly on the dfs
+	private byte[] putFileOnDFS(String filename) {
+		byte[] result = "".getBytes();
+		Path path = Paths.get(filename);
+		byte[] data = null;
+		try {
+			data = Files.readAllBytes(path);
+			byte[] command = FileServerProtocol.formCommand("put", filename, true, data);
+			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getIpAddress();
+			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getFilePortNumber();
+			result = getServerResponse(ipAddress, portNumber, command);
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return result;
+	}
+	
+	public byte[] concatenateByte (byte[] a, byte[] b) {
+		byte[] result;
+		if(a == null) {
+			result = new byte[b.length];
+			System.arraycopy(b, 0, result, 0, b.length);
+		}
+		else {
+			result = new byte[a.length + b.length];
+			System.arraycopy(a, 0, result, 0, a.length);
+			System.arraycopy(b, 0, result, a.length, b.length);
 		}
 		return result;
 	}

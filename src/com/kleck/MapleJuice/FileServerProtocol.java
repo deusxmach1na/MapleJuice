@@ -37,6 +37,9 @@ public class FileServerProtocol {
 		this.command = new String(Arrays.copyOfRange(header, 0, 16)).trim();
 		this.isFirst = new Boolean(new String(Arrays.copyOfRange(header, 16, 32)).trim());
 		this.filename = new String(Arrays.copyOfRange(header, 32, 128)).trim();
+		if(this.command.equals("getserv")) {
+			this.command = "get";
+		}
 		
 		//System.out.println(command);
 		//System.out.println(isFirst);
@@ -407,8 +410,6 @@ public class FileServerProtocol {
 			//get a list of all files
 			//if it has PART_ in it then see how many times it's replicated
 			if(listOfFiles[i].isFile() && (listOfFiles[i].toString().contains("PART_") ||
-											listOfFiles[i].toString().contains("MAPCOMPLETE_") ||
-											listOfFiles[i].toString().contains("JUICOMPLETE_") ||
 											listOfFiles[i].toString().contains(filePatternToConsider))) {
 				//turn it into a byte array
 				Path path = Paths.get(listOfFiles[i].toString());

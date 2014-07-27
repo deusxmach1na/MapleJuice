@@ -10,6 +10,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 
 public class MasterMapleJuiceServerProtocol {
@@ -20,6 +21,8 @@ public class MasterMapleJuiceServerProtocol {
 	private String commandOptions;
 	private String jarFile;
 	private String prefix;
+	private String numJuices;
+	private String destFile;
 	
 	
 	public byte[] processInput(byte[] data, FSServer fs) {
@@ -37,7 +40,7 @@ public class MasterMapleJuiceServerProtocol {
 		if(command.trim().equals("put")) {
 			result = new FileServerProtocol().processInput(data, fs);
 		}
-		else if(command.trim().equals("get")) {
+		else if(command.trim().equals("get") || command.trim().equals("getserv")) {
 			result = new FileServerProtocol().processInput(data, fs);
 		}
 		else if(command.trim().equals("del")) {
@@ -68,19 +71,35 @@ public class MasterMapleJuiceServerProtocol {
 		}
 		else if(command.trim().equals("juice master")) {
 			//get command options and send to master juice processor
-			this.commandOptions = new String(Arrays.copyOfRange(data, 0, data.length)).trim();	
-			result = this.processJuiceMaster();
+			if(this.fs.getGs().getMembershipList().getMaster().equals(this.fs.getGs().getProcessId())) {
+				this.commandOptions = new String(Arrays.copyOfRange(data, 0, data.length)).trim();
+				//System.out.println("Im here");
+				result = this.processJuiceMaster();
+			}
+			//handle master failure here
+			else {
+				result = "Not the master".getBytes();
+			}
 		}
 		
 		return result;
 	}
 
+	
+	//needs to do the following:
+	//1. spin up a new maple worker for each filename user has passed
+	//2. keep track of completed files 
+	//3. merge files at the end
 	private byte[] processMapleMaster() {
 		byte[] result = "".getBytes();
 		List<String> options = this.parseCommandOptions(this.commandOptions);
 		List<String> filesToMap = new ArrayList<String>();
-		List<DFSClientThread> mapleThreads = new ArrayList<DFSClientThread>();
-		List<String> completedMaples = new ArrayList<String>();
+		HashMap<String, String> fileCompletionStatus = new HashMap<String,String>();
+		List<String> listOfFinishedFiles = new ArrayList<String>();
+		
+		
+		//List<String> completedMaples = new ArrayList<String>();
+		//List<String> redoQueue = new ArrayList<String>();
 		
 		//System.out.println("Options size" + options.size());
 		//first option is the jar file
@@ -95,15 +114,16 @@ public class MasterMapleJuiceServerProtocol {
 		
 		for(int i=0;i<options.size()-4;i++) {
 			filesToMap.add(options.get(i+4));  //4 parameter offset
+			fileCompletionStatus.put(options.get(i+4), "Incomplete");
 		}
 		
 		//do the below until all maple files complete
-		while(completedMaples.size() < filesToMap.size()) {
-		
+		while(fileCompletionStatus.values().contains("Incomplete")) {
+			HashMap<String, DFSClientThread> mapleThreads = new HashMap<String, DFSClientThread>();
 			//rest of the options are what we need to run maple on
 			for(int i=0;i<filesToMap.size();i++) {
 				//only try to map this file if it is not completed
-				if(!completedMaples.contains(filesToMap.get(i))) {
+				if(fileCompletionStatus.get(filesToMap.get(i)).equals("Incomplete")) {
 				//choose a maple worker and tell it to start
 	
 					//send the command to a random server
@@ -111,46 +131,51 @@ public class MasterMapleJuiceServerProtocol {
 					String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToMap.get(i))).getIpAddress();
 					int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToMap.get(i))).getFilePortNumber();
 					//System.out.println("master sending maple command to worker" + portNumber);
-					mapleThreads.add(new DFSClientThread(ipAddress, portNumber, "maple none", command));
-					mapleThreads.get(i).start();
+					mapleThreads.put(filesToMap.get(i), new DFSClientThread(ipAddress, portNumber, "maple none", command));
+					mapleThreads.get(filesToMap.get(i)).start();
 				}
 			}
 			
 			//wait for processes to finish and see if they finished correctly
 		    //wait for all threads to return
-		    for(int i=0;i<mapleThreads.size();i++){
+		    for(String s:mapleThreads.keySet()){
 		    	try {
-		    		mapleThreads.get(i).join();
+		    		mapleThreads.get(s).join();
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
 		    }
 		    
-		    //find the completed files on the local system
-		    File folder = new File(".");
-			File[] listOfFiles = folder.listFiles();
-			for(int i=0;i<listOfFiles.length;i++) {
-				if(listOfFiles[i].isFile() && listOfFiles[i].toString().contains("MAPCOMPLETE_")) {
-					//add the file to the list of completed files
-					String addMe = listOfFiles[i].toString().split("_DELIM_")[1];
-					if(!completedMaples.contains(addMe)) {
-						completedMaples.add(addMe);
-					}
-				}
-			}
+		    //get completed file names
+		    //System.out.println("here" + mapleThreads.keySet());
+		    for(String key: mapleThreads.keySet()){
+			    String filesOnDFS = "";
+		    	//System.out.println(mapleThreads.get(key).getResponse());
+		    	//if the response does not start with ERROR: then 
+		    	if(mapleThreads.get(key).getResponse().contains("ERROR")) {
+		    		//do nothing so it can redo the maple
+		    	}
+		    	else {
+		    		fileCompletionStatus.put(key, "Completed");
+		    		filesOnDFS += " " + mapleThreads.get(key).getResponse();		    
+				    //reuse parse command options and add finished file names to array
+		    		for(String s:parseCommandOptions(filesOnDFS)) {
+		    			if(!s.equals("")) {
+		    				listOfFinishedFiles.add(s);
+		    			}
+		    		}
+		    	}
+		    }
 		}
 		
 		//should have all the files group and concatenate by key
-		this.groupFilesByKey();
-	    
-	    //delete the MAPCOMPLETE_ files 
+		this.groupFilesByKey(listOfFinishedFiles);
+		
+		
+	    //delete the MAPCOMPLETE_ files from the dfs
 	    //we have the data we need
-	    File folder = new File(".");
-		File[] listOfFiles = folder.listFiles();
-		for(int i=0;i<listOfFiles.length;i++) {
-			if(listOfFiles[i].isFile() && listOfFiles[i].toString().contains("MAPCOMPLETE_")) {
-				listOfFiles[i].delete();
-			}
+		for(String s:listOfFinishedFiles) {
+			this.deleteFromDFS(s);
 		}
 		
 	    //see if there were any maple worker failures
@@ -159,51 +184,40 @@ public class MasterMapleJuiceServerProtocol {
 		
 	}
 
+
 	//after the mapper files run this will group all the files by key
-	private void groupFilesByKey() {
-		List<String> filesToInclude = new ArrayList<String>();
+	private void groupFilesByKey(List<String> filesToGroup) {
 		List<String> keys = new ArrayList<String>();
-		 //find the completed files on the local system
-	    File folder = new File(".");
-		File[] listOfFiles = folder.listFiles();
-		for(int i=0;i<listOfFiles.length;i++) {
-			if(listOfFiles[i].isFile() && listOfFiles[i].toString().contains("MAPCOMPLETE_")) {
-				//add the file to the list of completed files only once
-				if(!filesToInclude.contains(listOfFiles[i].toString())) {
-					filesToInclude.add(listOfFiles[i].toString());
-					if(!keys.contains(listOfFiles[i].toString().split("_DELIM_")[3])) {
-						keys.add(listOfFiles[i].toString().split("_DELIM_")[3]);
-					}
-				}
+		 //get keys from completed files
+		for(int i=0;i<filesToGroup.size();i++) {
+			//System.out.println(filesToGroup.get(i));
+			if(!keys.contains(filesToGroup.get(i).split("_DELIM_")[3])) {
+				keys.add(filesToGroup.get(i).split("_DELIM_")[3]);
 			}
 		}
 		
 		//System.out.println("Merging " + filesToInclude.size() + " many files.");
 		
 		//loop through each key and merge files
-		List<String> completedFiles = new ArrayList<String>();
 		for(String s:keys) {
 			List<String> filesToMerge = new ArrayList<String>();
-			for(int i=0;i<filesToInclude.size();i++) {
+			for(int i=0;i<filesToGroup.size();i++) {
 				//if it has the key in the file name then merge it
-				if(filesToInclude.get(i).endsWith("_DELIM_" + this.prefix + "_DELIM_" + s) && !completedFiles.contains(filesToInclude.get(i))) {
-					filesToMerge.add(filesToInclude.get(i));
+				if(filesToGroup.get(i).endsWith("_DELIM_" + this.prefix + "_DELIM_" + s)) {
+					filesToMerge.add(filesToGroup.get(i));
 				}
 			}
 			//now send the files over for merging
-			this.mergeIntermediateFiles(filesToMerge);
-			for(int j=0;j<filesToMerge.size();j++) {
-				//System.out.println("Merging files" + filesToMerge.get(j));
-				completedFiles.add(filesToMerge.get(j));
-			}
-			
-			//distribute the finished files over hdfs
-			this.fs.getGs().replicateFiles(this.prefix + "_");
+			this.mergeIntermediateFiles(filesToMerge, this.prefix + "_" + s);
 		}
 	}
 
-	//merges intermediate files after mapper is done
-	private void mergeIntermediateFiles(List<String> filesToMerge) {
+	//merges intermediate files after mapper is done and after juicer
+	private void mergeIntermediateFiles(List<String> filesToMerge, String newFilename) {
+		//System.out.println("here " + newFilename);
+		//get the files from the dfs first
+		this.getFilesFromDFSByList(filesToMerge);
+		
 		List<String> lines = new ArrayList<String>();
 		for(int i=0;i<filesToMerge.size();i++) {	
 			try {
@@ -226,7 +240,6 @@ public class MasterMapleJuiceServerProtocol {
 		//sort the lines and write them back to a new file name
 		try {
 			Collections.sort(lines);
-			String newFilename = filesToMerge.get(0).toString().split("_DELIM_")[2] + "_" + filesToMerge.get(0).toString().split("_DELIM_")[3];
 			FileWriter fileWriter;
 			fileWriter = new FileWriter(newFilename);
 			PrintWriter out = new PrintWriter(fileWriter);
@@ -242,12 +255,27 @@ public class MasterMapleJuiceServerProtocol {
 		lines = null;
 	}
 
-	
-	
+
 	//JUICER
+	//needs to do the following
+	//1. give 1 juicer task per num_juicers until all files are consumed
+	//2. keep track of finished files
+	//3. merge the files
 	private byte[] processJuiceMaster() {
 		byte[] result = "".getBytes();
+		//should only be 4 commandOptions
+		//commandOptions.size == 6
+		List<String> options = this.parseCommandOptions(this.commandOptions);
+		List<String> filesToJuice = new ArrayList<String>();
+		List<DFSClientThread> juiceThreads = new ArrayList<DFSClientThread>();
+		List<String> completedJuices = new ArrayList<String>();
+		this.jarFile = options.get(2);
+		this.numJuices = options.get(3);
+		this.prefix = options.get(4);
+		this.destFile = options.get(5);
 		
+		
+		result = "Juice Master Complete".getBytes();
 		return result;
 		
 	}
@@ -300,6 +328,42 @@ public class MasterMapleJuiceServerProtocol {
 		System.arraycopy(filenameByte, 0, result, 112, 200);
 		System.arraycopy(interFileByte, 0, result, 312, 200);
 		return result;
+	}
+	
+	private void deleteFromDFS(String s) {
+		byte[] command = this.formFileCommand("del", s, true, "".getBytes());
+		String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getIpAddress();
+		int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getFilePortNumber();
+		DFSClientThread dct = new DFSClientThread(ipAddress, portNumber, "del none", command);
+		dct.start();
+    	try {
+    		dct.join();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	//gets the files from the DFS
+	private void getFilesFromDFSByList(List<String> filesToMerge) {
+		List<DFSClientThread> threads = new ArrayList<DFSClientThread>();
+		for(int i=0;i<filesToMerge.size();i++) {
+			String s = filesToMerge.get(i);
+			//System.out.println(s);
+			byte[] command = this.formFileCommand("getserv", s, true, "".getBytes());
+			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getIpAddress();
+			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getFilePortNumber();
+			threads.add(new DFSClientThread(ipAddress, portNumber, "getserv " + s, command));
+			threads.get(i).start();
+		}
+		
+		//wait for threads to come back
+	    for(int i=0;i<threads.size();i++){
+	    	try {
+	    		threads.get(i).join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+	    }
 	}
 	
 }
