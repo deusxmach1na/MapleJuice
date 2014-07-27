@@ -51,7 +51,12 @@ public class FileServerProtocol {
 			result = this.delete(filename, isFirst);
 		}
 		else if(command.trim().equals("reb")) {
-			result = this.rebalance();
+			if(this.filename.equals("")) {
+				result = this.rebalance("###nothingtolookfor###");
+			}
+			else {
+				result = this.rebalance(this.filename);
+			}
 		}
 		
 		return result;
@@ -388,7 +393,7 @@ public class FileServerProtocol {
 
 	//FAILURE DETECTED
 	//rebalance system
-	public byte[] rebalance() {
+	public byte[] rebalance(String filePatternToConsider) {
 		//pick a file
 		//then make sure there are at least replicationFactor copies
 		byte[] result = null;
@@ -403,7 +408,8 @@ public class FileServerProtocol {
 			//if it has PART_ in it then see how many times it's replicated
 			if(listOfFiles[i].isFile() && (listOfFiles[i].toString().contains("PART_") ||
 											listOfFiles[i].toString().contains("MAPCOMPLETE_") ||
-											listOfFiles[i].toString().contains("JUICOMPLETE_"))) {
+											listOfFiles[i].toString().contains("JUICOMPLETE_") ||
+											listOfFiles[i].toString().contains(filePatternToConsider))) {
 				//turn it into a byte array
 				Path path = Paths.get(listOfFiles[i].toString());
 				byte[] file = null;

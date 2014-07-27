@@ -1,7 +1,15 @@
 package com.kleck.MapleJuice;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class MasterMapleJuiceServerProtocol {
@@ -10,6 +18,8 @@ public class MasterMapleJuiceServerProtocol {
 	byte[] filedata = null;
 	private String command;
 	private String commandOptions;
+	private String jarFile;
+	private String prefix;
 	
 	
 	public byte[] processInput(byte[] data, FSServer fs) {
@@ -68,7 +78,9 @@ public class MasterMapleJuiceServerProtocol {
 	private byte[] processMapleMaster() {
 		byte[] result = "".getBytes();
 		List<String> options = this.parseCommandOptions(this.commandOptions);
+		List<String> filesToMap = new ArrayList<String>();
 		List<DFSClientThread> mapleThreads = new ArrayList<DFSClientThread>();
+		List<String> completedMaples = new ArrayList<String>();
 		
 		//System.out.println("Options size" + options.size());
 		//first option is the jar file
@@ -76,40 +88,163 @@ public class MasterMapleJuiceServerProtocol {
 		//	System.out.println(options.get(i));
 		//System.out.println("param size = " + options.size());
 		//}
-		String jarFile = options.get(2);
+		this.jarFile = options.get(2);
 		
 		//2nd option is the file prefix
-		String prefix = options.get(3);
+		this.prefix = options.get(3);
 		
-		//rest of the options are what we need to run maple on
 		for(int i=0;i<options.size()-4;i++) {
-			//choose a maple worker and tell it to start
-
-			//send the command to a random server
-			byte[] command = this.formMJCommand("maple none", jarFile, options.get(i + 4), prefix);
-			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(options.get(i + 4))).getIpAddress();
-			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(options.get(i + 4))).getFilePortNumber();
-			//System.out.println("master sending maple command to worker" + portNumber);
-			mapleThreads.add(new DFSClientThread(ipAddress, portNumber, "maple none", command));
-			mapleThreads.get(i).start();
+			filesToMap.add(options.get(i+4));  //4 parameter offset
 		}
 		
-		//wait for processes to finish and see if they finished correctly
-	    //wait for all threads to return
-	    for(int i=0;i<mapleThreads.size();i++){
-	    	try {
-	    		mapleThreads.get(i).join();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+		//do the below until all maple files complete
+		while(completedMaples.size() < filesToMap.size()) {
+		
+			//rest of the options are what we need to run maple on
+			for(int i=0;i<filesToMap.size();i++) {
+				//only try to map this file if it is not completed
+				if(!completedMaples.contains(filesToMap.get(i))) {
+				//choose a maple worker and tell it to start
+	
+					//send the command to a random server
+					byte[] command = this.formMJCommand("maple none", jarFile, filesToMap.get(i), prefix);
+					String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToMap.get(i))).getIpAddress();
+					int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToMap.get(i))).getFilePortNumber();
+					//System.out.println("master sending maple command to worker" + portNumber);
+					mapleThreads.add(new DFSClientThread(ipAddress, portNumber, "maple none", command));
+					mapleThreads.get(i).start();
+				}
 			}
-	    }
+			
+			//wait for processes to finish and see if they finished correctly
+		    //wait for all threads to return
+		    for(int i=0;i<mapleThreads.size();i++){
+		    	try {
+		    		mapleThreads.get(i).join();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+		    }
+		    
+		    //find the completed files on the local system
+		    File folder = new File(".");
+			File[] listOfFiles = folder.listFiles();
+			for(int i=0;i<listOfFiles.length;i++) {
+				if(listOfFiles[i].isFile() && listOfFiles[i].toString().contains("MAPCOMPLETE_")) {
+					//add the file to the list of completed files
+					String addMe = listOfFiles[i].toString().split("_DELIM_")[1];
+					if(!completedMaples.contains(addMe)) {
+						completedMaples.add(addMe);
+					}
+				}
+			}
+		}
+		
+		//should have all the files group and concatenate by key
+		this.groupFilesByKey();
 	    
+	    //delete the MAPCOMPLETE_ files 
+	    //we have the data we need
+	    File folder = new File(".");
+		File[] listOfFiles = folder.listFiles();
+		for(int i=0;i<listOfFiles.length;i++) {
+			if(listOfFiles[i].isFile() && listOfFiles[i].toString().contains("MAPCOMPLETE_")) {
+				listOfFiles[i].delete();
+			}
+		}
+		
 	    //see if there were any maple worker failures
 	    result = "Maple Master Complete".getBytes();
 		return result;
 		
 	}
 
+	//after the mapper files run this will group all the files by key
+	private void groupFilesByKey() {
+		List<String> filesToInclude = new ArrayList<String>();
+		List<String> keys = new ArrayList<String>();
+		 //find the completed files on the local system
+	    File folder = new File(".");
+		File[] listOfFiles = folder.listFiles();
+		for(int i=0;i<listOfFiles.length;i++) {
+			if(listOfFiles[i].isFile() && listOfFiles[i].toString().contains("MAPCOMPLETE_")) {
+				//add the file to the list of completed files only once
+				if(!filesToInclude.contains(listOfFiles[i].toString())) {
+					filesToInclude.add(listOfFiles[i].toString());
+					if(!keys.contains(listOfFiles[i].toString().split("_DELIM_")[3])) {
+						keys.add(listOfFiles[i].toString().split("_DELIM_")[3]);
+					}
+				}
+			}
+		}
+		
+		//System.out.println("Merging " + filesToInclude.size() + " many files.");
+		
+		//loop through each key and merge files
+		List<String> completedFiles = new ArrayList<String>();
+		for(String s:keys) {
+			List<String> filesToMerge = new ArrayList<String>();
+			for(int i=0;i<filesToInclude.size();i++) {
+				//if it has the key in the file name then merge it
+				if(filesToInclude.get(i).endsWith("_DELIM_" + this.prefix + "_DELIM_" + s) && !completedFiles.contains(filesToInclude.get(i))) {
+					filesToMerge.add(filesToInclude.get(i));
+				}
+			}
+			//now send the files over for merging
+			this.mergeIntermediateFiles(filesToMerge);
+			for(int j=0;j<filesToMerge.size();j++) {
+				//System.out.println("Merging files" + filesToMerge.get(j));
+				completedFiles.add(filesToMerge.get(j));
+			}
+			
+			//distribute the finished files over hdfs
+			this.fs.getGs().replicateFiles(this.prefix + "_");
+		}
+	}
+
+	//merges intermediate files after mapper is done
+	private void mergeIntermediateFiles(List<String> filesToMerge) {
+		List<String> lines = new ArrayList<String>();
+		for(int i=0;i<filesToMerge.size();i++) {	
+			try {
+				//read from the files
+				FileReader fileReader = new FileReader(filesToMerge.get(i));
+				BufferedReader br = new BufferedReader(fileReader);
+				String line = "";
+				while ((line = br.readLine()) != null) {
+				    lines.add(line);
+				}
+				br.close();
+				fileReader.close();
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+
+		//sort the lines and write them back to a new file name
+		try {
+			Collections.sort(lines);
+			String newFilename = filesToMerge.get(0).toString().split("_DELIM_")[2] + "_" + filesToMerge.get(0).toString().split("_DELIM_")[3];
+			FileWriter fileWriter;
+			fileWriter = new FileWriter(newFilename);
+			PrintWriter out = new PrintWriter(fileWriter);
+			for (String outputLine : lines) {
+				out.println(outputLine);
+			}
+			out.flush();
+			out.close();
+			fileWriter.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		lines = null;
+	}
+
+	
+	
+	//JUICER
 	private byte[] processJuiceMaster() {
 		byte[] result = "".getBytes();
 		

@@ -86,9 +86,9 @@ public class MapleJuiceServerProtocol {
 		this.getFileFromMaster(this.jarFile);
 		//get the file we will maple on
 		this.getFileFromMaster(this.filename);
-		System.out.println("Maple exec = " + this.jarFile);
-		System.out.println("Filename to maple = " + this.filename);
-		System.out.println("intermediate file prefix = " + this.interFile);
+		//System.out.println("Maple exec = " + this.jarFile);
+		//System.out.println("Filename to maple = " + this.filename);
+		//System.out.println("intermediate file prefix = " + this.interFile);
 		//got the files now execute the maple
 		ConcurrentMap<String, PrintWriter> pw = new ConcurrentHashMap<String, PrintWriter>();
 		List<String> filenames = new ArrayList<String>();  
@@ -123,6 +123,8 @@ public class MapleJuiceServerProtocol {
 		for(String key: pw.keySet()) {
 			pw.get(key).close();
 		}
+		
+		//put them on the master
 		for(int i=0;i<filenames.size();i++) {
 			File copyMe = new File(filenames.get(i));
 			File target = new File("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
@@ -130,6 +132,9 @@ public class MapleJuiceServerProtocol {
 			//put the files onto the master
 			this.putFileOnMaster("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
 		}
+		
+		//rebalance the system too
+		this.fs.getGs().replicateFiles("");
 		
 		return "Maple Complete".getBytes();
 	}
