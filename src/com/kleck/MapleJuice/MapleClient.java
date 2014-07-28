@@ -93,6 +93,11 @@ public class MapleClient {
 				//System.out.println("maple sent");
 				spinUpThreads(this.formMJCommand("maple master", command), "maple master");
 			}
+			//maple juice commands
+			else if(command.split(" ")[0].equals("juice")) {
+				//System.out.println("maple sent");
+				spinUpThreads(this.formMJCommand("juice master", command), "juice master");
+			}
 		}	
 	}
 	

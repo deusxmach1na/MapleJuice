@@ -52,7 +52,7 @@ public class MapleJuiceServerProtocol {
 		else if(command.trim().equals("del")) {
 			result = new FileServerProtocol().processInput(data, fs);
 		}
-		else if(command.trim().equals("reb")) {
+		else if(command.trim().equals("reb") || command.trim().equals("find")) {
 			result = new FileServerProtocol().processInput(data, fs);
 		}
 		else if(command.trim().equals("maple none")) {
@@ -152,7 +152,7 @@ public class MapleJuiceServerProtocol {
 	
 	//juicer
 	public byte[] processJuice() {
-		byte[] result;
+		String result = "";
 		//get the files we need
 		this.getFileFromMaster(this.jarFile);
 		this.getFileFromMaster(this.filename);
@@ -162,7 +162,8 @@ public class MapleJuiceServerProtocol {
 		try {
 			pw = new PrintWriter(this.interFile);
 			newFile = this.filename + "_DELIM_" + this.interFile;
-			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.interFile);
+			System.out.println("java -jar " + this.jarFile + " " + this.filename);
+			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.filename);
 			BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
 			BufferedReader err = new BufferedReader(new InputStreamReader(proc.getErrorStream()));
 			String s;
@@ -183,9 +184,10 @@ public class MapleJuiceServerProtocol {
 		File copyMe = new File(newFile);
 		File target = new File("JUICOMPLETE_" + "_DELIM_" + newFile);
 		copyMe.renameTo(target);
+		result += " " + target.toString();
 		
-		result = "Juice Complete".getBytes();
-		return result;
+		//result = "Juice Complete".getBytes();
+		return result.getBytes();
 		
 	}
 	
@@ -236,25 +238,6 @@ public class MapleJuiceServerProtocol {
 		return result;
 	}
 	
-	//put the file directly on the master node
-	private byte[] putFileOnMaster(String filename) {
-		byte[] result = "".getBytes();
-		Path path = Paths.get(filename);
-		byte[] data = "".getBytes();
-		try {
-			data = Files.readAllBytes(path);
-			byte[] command = FileServerProtocol.formCommand("put", filename, false, data);
-			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getIpAddress();
-			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getFilePortNumber();
-			result = getServerResponse(ipAddress, portNumber, command);
-		} catch (UnknownHostException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return result;
-	}
-	
 	//put the file directly on the dfs
 	private byte[] putFileOnDFS(String filename) {
 		byte[] result = "".getBytes();
@@ -274,6 +257,7 @@ public class MapleJuiceServerProtocol {
 		return result;
 	}
 	
+	//concat byte arrays
 	public byte[] concatenateByte (byte[] a, byte[] b) {
 		byte[] result;
 		if(a == null) {
@@ -287,4 +271,26 @@ public class MapleJuiceServerProtocol {
 		}
 		return result;
 	}
+	
+	/*
+	//not needed
+	//put the file directly on the master node
+	private byte[] putFileOnMaster(String filename) {
+		byte[] result = "".getBytes();
+		Path path = Paths.get(filename);
+		byte[] data = "".getBytes();
+		try {
+			data = Files.readAllBytes(path);
+			byte[] command = FileServerProtocol.formCommand("put", filename, false, data);
+			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getIpAddress();
+			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getFilePortNumber();
+			result = getServerResponse(ipAddress, portNumber, command);
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return result;
+	}
+	*/
 }

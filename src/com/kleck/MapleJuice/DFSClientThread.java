@@ -34,7 +34,8 @@ public class DFSClientThread extends Thread {
 		try {
 			//get the user command (put, get, delete)		
 			if(this.commandType.equals("put") || this.commandType.equals("del") 
-					|| this.commandType.equals("reb") || this.commandType.equals("maple")) {
+					|| this.commandType.equals("reb") || this.commandType.equals("maple")
+					|| this.commandType.equals("find") || this.commandType.equals("juice")) {
 				//System.out.println("issuing " + commandType + " to server");
 				this.setServerResponse(getServerResponse());
 			}
@@ -59,7 +60,7 @@ public class DFSClientThread extends Thread {
 			Thread.currentThread().interrupt();
 			return;	
 		} catch (EOFException e) {
-			this.setServerResponse("IOException".getBytes());
+			this.setServerResponse("EOFException".getBytes());
 			//issue connecting to server assume it failed
 			//e.printStackTrace();	
 			//if(this.commandType.equals("get")) {

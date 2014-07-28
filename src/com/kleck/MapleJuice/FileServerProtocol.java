@@ -61,10 +61,102 @@ public class FileServerProtocol {
 				result = this.rebalance(this.filename);
 			}
 		}
+		else if(command.trim().equals("find")) {
+			result = this.find(this.filename);
+		}
 		
 		return result;
 	}
 	
+
+	//NEW METHOD
+	//find filenames by keyword
+	//need to strip off the _PART stuff
+	private byte[] find(String keyword) {
+		String result = "";
+		this.fs.getGs().getMembershipList().setMaster();
+		this.fs.getGs().getMembershipList().setSuccessors();
+		//System.out.println("find started" + keyword);
+		if(this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).isMaster() && this.isFirst) {	
+			//collect all the DFS servers responses
+			String firstProcess = this.fs.getGs().getProcessId();
+			String potentialProcess = firstProcess;
+			int iter = 1;
+			
+			while((potentialProcess != firstProcess || iter == 1) && iter < 100) {
+				//System.out.println("search started");
+				//issue the find command with isFirst = false
+				String hostname = this.fs.getGs().getMembershipList().getMember(potentialProcess).getIpAddress();
+				int portNumber = this.fs.getGs().getMembershipList().getMember(potentialProcess).getFilePortNumber();
+				//start a new socket and send the file exists command
+				Socket dlSocket;
+				try {
+					//System.out.println(hostname);
+					//System.out.println(portNumber);
+					dlSocket = new Socket(hostname, portNumber);
+					byte[] command = FileServerProtocol.formCommand("find", keyword, false, "".getBytes());
+					OutputStream out = dlSocket.getOutputStream();
+					DataOutputStream dos = new DataOutputStream(out);
+					//this.fs.getGs().updateBytesUsed(command.length);
+					dos.writeInt(command.length);
+					dos.write(command);
+					
+					//get input
+					InputStream in = dlSocket.getInputStream();
+					DataInputStream dis = new DataInputStream(in);
+					int len = dis.readInt();
+					//this.fs.getGs().updateBytesUsed(len);
+				    byte[] data = new byte[len];
+				    //results found
+				    if (len > 0) {
+				        dis.readFully(data);
+				        result += new String(data);
+				        //System.out.println(result);
+				    }
+				    //results not found
+				    else {
+				    }
+					dlSocket.close();
+				} catch (UnknownHostException e) {
+					e.printStackTrace();
+				} catch (EOFException e) {
+					e.printStackTrace();
+				} catch (IOException e) {
+					e.printStackTrace();
+				} 
+				
+				//next process
+				iter ++;
+				potentialProcess = this.fs.getGs().getMembershipList().getMember(potentialProcess).getSuccessor();
+			}
+			result = this.deduplicate(result);
+			
+		}
+		if(!this.isFirst) {
+			List<String> keysFound = new ArrayList<String>();
+			File folder = new File(".");
+			File[] listOfFiles = folder.listFiles();
+			for(int i=0;i<listOfFiles.length;i++) {
+				//System.out.println("slave thinks keyword is " + keyword + listOfFiles[i].toString());
+				if(listOfFiles[i].isFile() && listOfFiles[i].toString().startsWith("./" + keyword) && listOfFiles[i].toString().contains("PART_")) {
+					//regex = PART_[0-9].*$
+					String keyFound = listOfFiles[i].toString().replaceAll("PART_[0-9].*$", "").replace("./", "");
+					//System.out.println(keyFound);
+					if(!keysFound.contains(keyFound)) {
+						keysFound.add(keyFound);
+					}
+				}
+			}
+			result = "";
+			for(int i=0;i<keysFound.size();i++) {
+				result += keysFound + " ";
+			}
+			//System.out.println("slave found " + result);
+		}
+		
+		return result.getBytes();
+	}
+
 
 	//this needs to take a file and shard it then push it to other servers
 	//so it is duplicated the number of times indicated in replicationfactor setting
@@ -178,7 +270,7 @@ public class FileServerProtocol {
 						InputStream in = dlSocket.getInputStream();
 						DataInputStream dis = new DataInputStream(in);
 						int len = dis.readInt();
-						this.fs.getGs().updateBytesUsed(len);
+						//this.fs.getGs().updateBytesUsed(len);
 					    byte[] data = new byte[len];
 					    //file found
 					    if (len > 0) {
@@ -495,4 +587,23 @@ public class FileServerProtocol {
 		//System.out.println("***********************");
 		return result;
 	}	
+	
+
+	//for the find method
+	private String deduplicate(String dedupe) {
+		String keys[] = dedupe.split(" ");
+		List<String> keysFound = new ArrayList<String>();
+		for(int i=0;i<keys.length;i++) {
+			if(!keysFound.contains(keys[i].trim()) && !(keys[i].equals(" ") || keys[i].equals("\n"))) {
+				keysFound.add(keys[i]);
+			}
+		}
+		
+		String result = "";
+		for(int i=0;i<keysFound.size();i++) {
+			result += keysFound.get(i) + " ";
+		}
+		
+		return result;	
+	}
 }
