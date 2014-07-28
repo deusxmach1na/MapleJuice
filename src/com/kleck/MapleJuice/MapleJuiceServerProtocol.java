@@ -160,8 +160,8 @@ public class MapleJuiceServerProtocol {
 		String newFile = "";
 		//got the files now execute the juice
 		try {
-			pw = new PrintWriter(this.interFile);
 			newFile = this.filename + "_DELIM_" + this.interFile;
+			pw = new PrintWriter(newFile);
 			System.out.println("java -jar " + this.jarFile + " " + this.filename);
 			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.filename);
 			BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
@@ -184,6 +184,7 @@ public class MapleJuiceServerProtocol {
 		File copyMe = new File(newFile);
 		File target = new File("JUICOMPLETE_" + "_DELIM_" + newFile);
 		copyMe.renameTo(target);
+		this.putFileOnDFS(target.toString());
 		result += " " + target.toString();
 		
 		//result = "Juice Complete".getBytes();
