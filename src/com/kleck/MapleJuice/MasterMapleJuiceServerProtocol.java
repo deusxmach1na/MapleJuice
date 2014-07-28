@@ -24,7 +24,7 @@ public class MasterMapleJuiceServerProtocol {
 	private String commandOptions;
 	private String jarFile;
 	private String prefix;
-	private String numJuices;
+	private int numJuices;
 	private String destFile;
 	
 	
@@ -63,9 +63,13 @@ public class MasterMapleJuiceServerProtocol {
 		else if(command.trim().equals("maple master")) {
 			//get command options and send to master maple processor
 			if(this.fs.getGs().getMembershipList().getMaster().equals(this.fs.getGs().getProcessId())) {
+				LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_MAP_JOB_STARTED#");
+				lt.start();	 
 				this.commandOptions = new String(Arrays.copyOfRange(data, 0, data.length)).trim();
 				//System.out.println("Im here");
 				result = this.processMapleMaster();
+				LoggerThread lt2 = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_MAP_JOB_FINISHED#");
+				lt2.start();	 
 			}
 			//handle master failure here
 			else {
@@ -75,9 +79,13 @@ public class MasterMapleJuiceServerProtocol {
 		else if(command.trim().equals("juice master")) {
 			//get command options and send to master juice processor
 			if(this.fs.getGs().getMembershipList().getMaster().equals(this.fs.getGs().getProcessId())) {
+				LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_JUICE_JOB_STARTED#");
+				lt.start();	 
 				this.commandOptions = new String(Arrays.copyOfRange(data, 0, data.length)).trim();
 				//System.out.println("Im here");
 				result = this.processJuiceMaster();
+				LoggerThread lt2 = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_JUICE_JOB_FINISHED#");
+				lt2.start();	 
 			}
 			//handle master failure here
 			else {
@@ -136,6 +144,8 @@ public class MasterMapleJuiceServerProtocol {
 					int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToMap.get(i))).getFilePortNumber();
 					//System.out.println("master sending maple command to worker" + portNumber);
 					mapleThreads.put(filesToMap.get(i), new DFSClientThread(ipAddress, portNumber, "maple none", command));
+					LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_MAP_TASK_STARTED#" + filesToMap.get(i));
+					lt.start();	 
 					mapleThreads.get(filesToMap.get(i)).start();
 				}
 			}
@@ -145,6 +155,8 @@ public class MasterMapleJuiceServerProtocol {
 		    for(String s:mapleThreads.keySet()){
 		    	try {
 		    		mapleThreads.get(s).join();
+					LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_MAP_TASK_FINISHED#" + s);
+					lt.start();	 
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -179,10 +191,6 @@ public class MasterMapleJuiceServerProtocol {
 		
 	    //delete the MAPCOMPLETE_ files from the dfs
 	    //we have the data we need
-		for(String s:listOfFinishedFiles) {
-			this.deleteFromDFS(s);
-		}
-		
 		//put the key files on the DFS and clean up local stuff
 		this.cleanUpLocal();
 		
@@ -210,7 +218,7 @@ public class MasterMapleJuiceServerProtocol {
 		
 		this.jarFile = options.get(2);
 		//System.out.println("jar file = " + this.jarFile);
-		this.numJuices = options.get(3);
+		this.numJuices = Integer.parseInt(options.get(3));
 		//System.out.println("num juices = " + this.numJuices);
 		this.prefix = options.get(4);
 		//System.out.println("prefix = " + this.prefix);
@@ -219,7 +227,7 @@ public class MasterMapleJuiceServerProtocol {
 		
 		//get a list of files to juice
 		filesToJuice = this.searchDFSByPattern(this.prefix);
-		System.out.println(filesToJuice);
+		//System.out.println(filesToJuice);
 		
 		for(int i=0;i<filesToJuice.size();i++) {
 			fileCompletionStatus.put(filesToJuice.get(i), "Incomplete");
@@ -229,6 +237,7 @@ public class MasterMapleJuiceServerProtocol {
 		while(fileCompletionStatus.values().contains("Incomplete")) {
 			//for 1 through numJuices send fileToJuice to a juicer
 			HashMap<String, DFSClientThread> juiceThreads = new HashMap<String, DFSClientThread>();
+			List<String> allowedProcesses = new ArrayList<String>();
 			//rest of the options are what we need to run maple on
 			for(int i=0;i<filesToJuice.size();i++) {
 				//only try to juice this file if it is not completed
@@ -236,11 +245,40 @@ public class MasterMapleJuiceServerProtocol {
 				//choose a juice worker and tell it to start
 					//send the command to a random server
 					byte[] command = this.formMJCommand("juice none", this.jarFile, filesToJuice.get(i), this.destFile);
-					String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToJuice.get(i))).getIpAddress();
-					int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToJuice.get(i))).getFilePortNumber();
-					//System.out.println("master sending maple command to worker" + portNumber);
-					juiceThreads.put(filesToJuice.get(i), new DFSClientThread(ipAddress, portNumber, "juice none", command));
-					juiceThreads.get(filesToJuice.get(i)).start();
+					boolean fileComplete = false;
+					
+					//only allow certain processes
+					String proposedProcess = this.fs.getGs().getSendToProcess(filesToJuice.get(i));
+					
+					while(!fileComplete) {
+						//add the new process
+						if(allowedProcesses.size() < this.numJuices) {
+							allowedProcesses.add(proposedProcess);
+						}
+						if(allowedProcesses.contains(proposedProcess)) {
+							String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(proposedProcess)).getIpAddress();
+							int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(proposedProcess)).getFilePortNumber();
+							//System.out.println("master sending maple command to worker" + portNumber);
+							LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_JUICE_TASK_STARTED#" + filesToJuice.get(i));
+							lt.start();	 
+							juiceThreads.put(filesToJuice.get(i), new DFSClientThread(ipAddress, portNumber, "juice none", command));
+							juiceThreads.get(filesToJuice.get(i)).start();
+							fileComplete = true;
+						}
+						proposedProcess = this.fs.getGs().getMembershipList().getMember(proposedProcess).getSuccessor();
+						
+						//delete dead processes from allowedProcesses
+						for(int z=0;z<allowedProcesses.size();z++) {
+							if(!this.fs.getGs().getMembershipList().hasKey(allowedProcesses.get(z))) {
+								allowedProcesses.remove(z);
+							}
+							else if(this.fs.getGs().getMembershipList().getMember(allowedProcesses.get(z)).isDeletable()) {
+								allowedProcesses.remove(z);
+							}
+						}
+					}
+					
+					//if any processes have left remove them from the allowed process
 				}
 			}
 			
@@ -249,6 +287,8 @@ public class MasterMapleJuiceServerProtocol {
 		    for(String s:juiceThreads.keySet()){
 		    	try {
 		    		juiceThreads.get(s).join();
+					LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_JUICE_TASK_FINISHED#" + s);
+					lt.start();	 
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -286,11 +326,7 @@ public class MasterMapleJuiceServerProtocol {
 		this.putFilesOnDFSByList(destFiles);
 		
 	    //delete the JUICOMPLETE_ files from the dfs
-	    //we have the data we need
-		for(String s:listOfFinishedFiles) {
-			//this.deleteFromDFS(s);
-		}
-		
+	    //we have the data we need		
 		//clean up local stuff
 		this.cleanUpLocal();
 		
@@ -447,6 +483,7 @@ public class MasterMapleJuiceServerProtocol {
 		return result;
 	}
 	
+	/*
 	private void deleteFromDFS(String s) {
 		byte[] command = this.formFileCommand("del", s, true, "".getBytes());
 		String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getIpAddress();
@@ -459,6 +496,7 @@ public class MasterMapleJuiceServerProtocol {
 			e.printStackTrace();
 		}
 	}
+	*/
 	
 	//gets the files from the DFS
 	private void getFilesFromDFSByList(List<String> filesToMerge) {

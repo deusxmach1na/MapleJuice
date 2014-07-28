@@ -170,7 +170,7 @@ public class FileServerProtocol {
 		if(this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).isMaster() && isFirstRun) {
 			int size = Integer.parseInt(this.fs.getGs().getProps().getProperty("shardsize"));
 			List<byte[]> files = FileServerProtocol.shardFile(file, size);
-			System.out.println("Sharded into " + files.size() + " files.");
+			//System.out.println("Sharded into " + files.size() + " files.");
 			int replicationFactor = Integer.parseInt(this.fs.getGs().getProps().getProperty("replicationfactor"));
 			//append a digit to the filename then save 1 copy on the correct node
 			//then store another copy on the each nodes successor

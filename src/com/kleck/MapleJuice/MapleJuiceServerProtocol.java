@@ -81,7 +81,7 @@ public class MapleJuiceServerProtocol {
 	public byte[] processMaple() {
 		byte[] result = "".getBytes();
 		boolean processingError = false;
-		System.out.println("Maple Worker started");
+		//System.out.println("Maple Worker started");
 		//byte[] result = "".getBytes();
 		//1 maple task per filename
 		//need to get the files from the master if it doesn't exist in order to do the maple
@@ -95,6 +95,8 @@ public class MapleJuiceServerProtocol {
 		ConcurrentMap<String, PrintWriter> pw = new ConcurrentHashMap<String, PrintWriter>();
 		List<String> filenames = new ArrayList<String>();  
 		try {
+			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_MAP_FILE#" + this.filename);
+			lt.start();	 
 			//Process proc=Runtime.getRuntime().exec(new String[]{"java","-jar","Maple.jar","wordcount.txt"});
 			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.filename);
 			//proc.waitFor();
@@ -162,7 +164,9 @@ public class MapleJuiceServerProtocol {
 		try {
 			newFile = this.filename + "_DELIM_" + this.interFile;
 			pw = new PrintWriter(newFile);
-			System.out.println("java -jar " + this.jarFile + " " + this.filename);
+			//System.out.println("java -jar " + this.jarFile + " " + this.filename);
+			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_JUICE_FILE#" + newFile);
+			lt.start();	 
 			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.filename);
 			BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
 			BufferedReader err = new BufferedReader(new InputStreamReader(proc.getErrorStream()));
