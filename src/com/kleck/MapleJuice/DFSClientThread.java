@@ -1,6 +1,8 @@
 package com.kleck.MapleJuice;
 
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -77,13 +79,13 @@ public class DFSClientThread extends Thread {
 	private byte[] getServerResponse() throws UnknownHostException, IOException {
 		//System.out.println(this.commandType);
 		Socket dlSocket = new Socket(this.ipAddress, this.portNumber);
-		OutputStream out = dlSocket.getOutputStream();
+		BufferedOutputStream out = new BufferedOutputStream(dlSocket.getOutputStream());
 		DataOutputStream dos = new DataOutputStream(out);
 		dos.writeInt(this.data.length);
 		dos.write(this.data);
 		dos.flush();
 		
-		InputStream in = dlSocket.getInputStream();
+		BufferedInputStream in = new BufferedInputStream(dlSocket.getInputStream());
 		DataInputStream dis = new DataInputStream(in);
 		int len = dis.readInt();
 		byte[] result = new byte[len];
@@ -91,6 +93,10 @@ public class DFSClientThread extends Thread {
 		    dis.readFully(result);
 		}
 		//System.out.println(new String(data));
+		out.close();
+		dos.close();
+		in.close();
+		dis.close();
 		dlSocket.close();
 		return result;
 	}

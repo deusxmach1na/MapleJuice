@@ -1,5 +1,6 @@
 package com.kleck.MapleJuice;
 
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -190,11 +191,13 @@ public class FileServerProtocol {
 						//System.out.println(portNumber);
 						dlSocket = new Socket(hostname, portNumber);
 						byte[] command = FileServerProtocol.formCommand("put", newFile, false, files.get(i));
-						OutputStream out = dlSocket.getOutputStream();
+						BufferedOutputStream out = new BufferedOutputStream(dlSocket.getOutputStream());
 						DataOutputStream dos = new DataOutputStream(out);
 						//this.fs.getGs().updateBytesUsed(command.length);
 						dos.writeInt(command.length);
 						dos.write(command);
+						out.close();
+						dos.close();
 						dlSocket.close();
 					} catch (UnknownHostException e) {
 						e.printStackTrace();
@@ -502,7 +505,9 @@ public class FileServerProtocol {
 			//get a list of all files
 			//if it has PART_ in it then see how many times it's replicated
 			if(listOfFiles[i].isFile() && (listOfFiles[i].toString().contains("PART_") ||
-											listOfFiles[i].toString().contains(filePatternToConsider))) {
+											listOfFiles[i].toString().contains(filePatternToConsider))
+											&& !(listOfFiles[i].toString().contains("MAPCOMPLETE_") ||
+												listOfFiles[i].toString().contains("JUICOMPLETE"))) {
 				//turn it into a byte array
 				Path path = Paths.get(listOfFiles[i].toString());
 				byte[] file = null;

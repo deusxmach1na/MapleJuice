@@ -16,10 +16,20 @@ public class MapleWordCount {
 		try {
 			fileScan = new Scanner(file);
 			while(fileScan.hasNext()) {
-				System.out.println("( " + fileScan.next() + " , 1 )");
+				String cleanseMe = cleanse(fileScan.next());
+				if(!cleanseMe.equals("")) {
+					System.out.println("( " + cleanseMe + " , 1 )");
+				}
 			}
 		} catch (FileNotFoundException e) {
 			System.err.println("Could not find file");
 		}
+	}
+
+	private static String cleanse(String cleanseMe) {
+		String result = cleanseMe.replaceAll("[^A-Za-z0-9]", "");
+		result = result.replace("-", "").replace(".", "").replace(",", "");
+		result = result.toLowerCase();
+		return result;
 	}
 }

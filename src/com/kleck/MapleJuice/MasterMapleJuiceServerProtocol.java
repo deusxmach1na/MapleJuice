@@ -140,8 +140,13 @@ public class MasterMapleJuiceServerProtocol {
 	
 					//send the command to a random server
 					byte[] command = this.formMJCommand("maple none", jarFile, filesToMap.get(i), prefix);
-					String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToMap.get(i))).getIpAddress();
-					int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getSendToProcess(filesToMap.get(i))).getFilePortNumber();
+					String potentialProcess = this.fs.getGs().getSendToProcess(filesToMap.get(i));
+					if(potentialProcess.equals(this.fs.getGs().getProcessId())) {
+						potentialProcess = this.fs.getGs().getSuccessor();
+					}
+						
+					String ipAddress = this.fs.getGs().getMembershipList().getMember(potentialProcess).getIpAddress();
+					int portNumber = this.fs.getGs().getMembershipList().getMember(potentialProcess).getFilePortNumber();
 					//System.out.println("master sending maple command to worker" + portNumber);
 					mapleThreads.put(filesToMap.get(i), new DFSClientThread(ipAddress, portNumber, "maple none", command));
 					LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_MAP_TASK_STARTED#" + filesToMap.get(i));
@@ -251,6 +256,10 @@ public class MasterMapleJuiceServerProtocol {
 					String proposedProcess = this.fs.getGs().getSendToProcess(filesToJuice.get(i));
 					
 					while(!fileComplete) {
+						//don't let the master get added
+						if(proposedProcess.equals(this.fs.getGs().getProcessId())) {
+							proposedProcess = this.fs.getGs().getSuccessor();
+						}
 						//add the new process
 						if(allowedProcesses.size() < this.numJuices) {
 							allowedProcesses.add(proposedProcess);
@@ -365,8 +374,12 @@ public class MasterMapleJuiceServerProtocol {
 		 //get keys from completed files
 		for(int i=0;i<filesToGroup.size();i++) {
 			//System.out.println(filesToGroup.get(i));
-			if(!keys.contains(filesToGroup.get(i).split("_DELIM_")[3])) {
-				keys.add(filesToGroup.get(i).split("_DELIM_")[3]);
+			try {
+				if(!keys.contains(filesToGroup.get(i).split("_DELIM_")[3])) {
+					keys.add(filesToGroup.get(i).split("_DELIM_")[3]);
+				}
+			} catch(ArrayIndexOutOfBoundsException e) {
+				
 			}
 		}
 		
@@ -417,8 +430,7 @@ public class MasterMapleJuiceServerProtocol {
 		//sort the lines and write them back to a new file name
 		try {
 			Collections.sort(lines);
-			FileWriter fileWriter;
-			fileWriter = new FileWriter(newFilename);
+			FileWriter fileWriter = new FileWriter(newFilename);
 			PrintWriter out = new PrintWriter(fileWriter);
 			for (String outputLine : lines) {
 				out.println(outputLine);

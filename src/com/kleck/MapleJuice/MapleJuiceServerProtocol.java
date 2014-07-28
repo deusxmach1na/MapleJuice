@@ -1,8 +1,10 @@
 package com.kleck.MapleJuice;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -11,6 +13,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.io.FileWriter;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
@@ -21,6 +24,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MapleJuiceServerProtocol {
 	private FSServer fs;
@@ -95,7 +100,7 @@ public class MapleJuiceServerProtocol {
 		ConcurrentMap<String, PrintWriter> pw = new ConcurrentHashMap<String, PrintWriter>();
 		List<String> filenames = new ArrayList<String>();  
 		try {
-			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_MAP_FILE#" + this.filename);
+			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_MAPTASK_FILE#" + this.filename);
 			lt.start();	 
 			//Process proc=Runtime.getRuntime().exec(new String[]{"java","-jar","Maple.jar","wordcount.txt"});
 			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.filename);
@@ -110,7 +115,7 @@ public class MapleJuiceServerProtocol {
 				String key = s.split(",")[0].replace("(", "").trim();
 				if(!pw.containsKey(key)) {
 					String newFile = this.filename + "_DELIM_" + this.interFile + "_DELIM_" + key;
-					pw.putIfAbsent(key, new PrintWriter(newFile, "UTF-8"));
+					pw.putIfAbsent(key, new PrintWriter(new BufferedWriter(new FileWriter(newFile, true))));
 					filenames.add(newFile);
 				}
 				pw.get(key).println(s);
@@ -133,6 +138,8 @@ public class MapleJuiceServerProtocol {
 			pw.get(key).close();
 		}
 		
+		//start an executor service
+		ExecutorService ex = Executors.newFixedThreadPool(20);
 		if(!processingError) {
 			//put them on the dfs
 			for(int i=0;i<filenames.size();i++) {
@@ -141,10 +148,11 @@ public class MapleJuiceServerProtocol {
 				copyMe.renameTo(target);
 				result = this.concatenateByte(result, (" MAPCOMPLETE_" + "_DELIM_" + filenames.get(i)).getBytes());
 				//put the files onto the dfs
-				this.putFileOnDFS("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
+				DFSClientThread dct = this.putFileOnDFS("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
+				ex.execute(dct);
 				//done now delete the files
 				copyMe.delete();
-				target.delete();
+				//target.delete();
 			}
 		}
 		
@@ -165,7 +173,7 @@ public class MapleJuiceServerProtocol {
 			newFile = this.filename + "_DELIM_" + this.interFile;
 			pw = new PrintWriter(newFile);
 			//System.out.println("java -jar " + this.jarFile + " " + this.filename);
-			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_JUICE_FILE#" + newFile);
+			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_JUICETASK_FILE#" + newFile);
 			lt.start();	 
 			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.filename);
 			BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
@@ -217,22 +225,31 @@ public class MapleJuiceServerProtocol {
 	
 	//get the file that is passed back
 	private byte[] getServerResponse(String ipAddress, int portNumber, byte[] data) throws UnknownHostException, IOException {
-		Socket dlSocket = new Socket(ipAddress, portNumber);
-		OutputStream out = dlSocket.getOutputStream();
-		DataOutputStream dos = new DataOutputStream(out);
-		dos.writeInt(data.length);
-		dos.write(data);
-		dos.flush();
-		
-		InputStream in = dlSocket.getInputStream();
-		DataInputStream dis = new DataInputStream(in);
-		int len = dis.readInt();
-		byte[] result = new byte[len];
-		if (len > 0) {
-		    dis.readFully(result);
+		byte[] result = "".getBytes();
+		try {
+			Socket dlSocket = new Socket(ipAddress, portNumber);
+			OutputStream out = dlSocket.getOutputStream();
+			DataOutputStream dos = new DataOutputStream(out);
+			dos.writeInt(data.length);
+			dos.write(data);
+			dos.flush();
+			
+			InputStream in = dlSocket.getInputStream();
+			DataInputStream dis = new DataInputStream(in);
+			int len = dis.readInt();
+			result = new byte[len];
+			if (len > 0) {
+			    dis.readFully(result);
+			}
+			out.close();
+			dos.close();
+			in.close();
+			dis.close();
+			//System.out.println(new String(data));
+			dlSocket.close();
+		} catch (EOFException e) {
+			e.printStackTrace();
 		}
-		//System.out.println(new String(data));
-		dlSocket.close();
 		return result;
 	}
 	
@@ -243,24 +260,6 @@ public class MapleJuiceServerProtocol {
 		return result;
 	}
 	
-	//put the file directly on the dfs
-	private byte[] putFileOnDFS(String filename) {
-		byte[] result = "".getBytes();
-		Path path = Paths.get(filename);
-		byte[] data = null;
-		try {
-			data = Files.readAllBytes(path);
-			byte[] command = FileServerProtocol.formCommand("put", filename, true, data);
-			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getIpAddress();
-			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getFilePortNumber();
-			result = getServerResponse(ipAddress, portNumber, command);
-		} catch (UnknownHostException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return result;
-	}
 	
 	//concat byte arrays
 	public byte[] concatenateByte (byte[] a, byte[] b) {
@@ -298,4 +297,24 @@ public class MapleJuiceServerProtocol {
 		return result;
 	}
 	*/
+	
+	//put the file directly on the dfs
+	private DFSClientThread putFileOnDFS(String filename) {
+		DFSClientThread dct = null;
+		Path path = Paths.get(filename);
+		byte[] data = null;
+		try {
+			data = Files.readAllBytes(path);
+			byte[] command = FileServerProtocol.formCommand("put", filename, true, data);
+			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getIpAddress();
+			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getFilePortNumber();
+			dct = new DFSClientThread(ipAddress, portNumber, "put none", command);
+			//result = getServerResponse(ipAddress, portNumber, command);
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return dct;
+	}
 }
