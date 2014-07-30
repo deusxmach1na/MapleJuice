@@ -97,9 +97,17 @@ public class MapleJuiceServerProtocol {
 		//System.out.println("Filename to maple = " + this.filename);
 		//System.out.println("intermediate file prefix = " + this.interFile);
 		//got the files now execute the maple
-		ConcurrentMap<String, PrintWriter> pw = new ConcurrentHashMap<String, PrintWriter>();
+
+		//ConcurrentMap<String, PrintWriter> keysFound = new ConcurrentHashMap<String, PrintWriter>();
+		//ConcurrentMap<String, PrintWriter> pw = new ConcurrentHashMap<String, PrintWriter>();
+		
+		PrintWriter fileToWrite = null;
+		
 		List<String> filenames = new ArrayList<String>();  
 		try {
+			//put the results into 1 file
+			fileToWrite = new PrintWriter(new BufferedWriter(new FileWriter(this.interFile + "_DELIM_" + this.filename, true)));
+			filenames.add(this.interFile + "_DELIM_" + this.filename);
 			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_MAPTASK_FILE#" + this.filename);
 			lt.start();	 
 			//Process proc=Runtime.getRuntime().exec(new String[]{"java","-jar","Maple.jar","wordcount.txt"});
@@ -113,12 +121,16 @@ public class MapleJuiceServerProtocol {
 			while ((s = in.readLine()) != null) {
 				//spin up a new Print Writer if necessary
 				String key = s.split(",")[0].replace("(", "").trim();
+				
+				/*
 				if(!pw.containsKey(key)) {
 					String newFile = this.filename + "_DELIM_" + this.interFile + "_DELIM_" + key;
 					pw.putIfAbsent(key, new PrintWriter(new BufferedWriter(new FileWriter(newFile, true))));
 					filenames.add(newFile);
 				}
 				pw.get(key).println(s);
+				*/
+				fileToWrite.println(s);
             }
             while ((s = err.readLine()) != null) {
                 System.out.println(s);
@@ -134,12 +146,16 @@ public class MapleJuiceServerProtocol {
 		
 		//we are done so rename files accordingly so everyone knows this is done
 		//close print writers
+		fileToWrite.close();
+		/*
 		for(String key: pw.keySet()) {
 			pw.get(key).close();
 		}
+		*/
 		
 		//start an executor service
 		ExecutorService ex = Executors.newFixedThreadPool(20);
+		//List<DFSClientThread> putFileThreads = new ArrayList<DFSClientThread>();
 		if(!processingError) {
 			//put them on the dfs
 			for(int i=0;i<filenames.size();i++) {
@@ -151,11 +167,15 @@ public class MapleJuiceServerProtocol {
 				DFSClientThread dct = this.putFileOnDFS("MAPCOMPLETE_" + "_DELIM_" + filenames.get(i));
 				ex.execute(dct);
 				//done now delete the files
-				copyMe.delete();
+				//copyMe.delete();
 				//target.delete();
 			}
 		}
-		
+		ex.shutdown();
+		while(!ex.isTerminated()) {
+			
+		}
+		//System.out.println("out");
 		return result;
 	}
 	
@@ -183,6 +203,7 @@ public class MapleJuiceServerProtocol {
 			//while there is output write it to the output file
 			while ((s = in.readLine()) != null) {
 				pw.println(s);
+				//System.out.println(s);
             }
             while ((s = err.readLine()) != null) {
                 System.out.println(s);
@@ -193,20 +214,45 @@ public class MapleJuiceServerProtocol {
 			e.printStackTrace();
 		} 
 		pw.close();
+		
+		//System.out.println(copyMe.toString());
 		File copyMe = new File(newFile);
 		File target = new File("JUICOMPLETE_" + "_DELIM_" + newFile);
 		copyMe.renameTo(target);
 		this.putFileOnDFS(target.toString());
-		result += " " + target.toString();
+		result = target.toString();
+		/*
+		try {
+		BufferedReader reader = new BufferedReader( new FileReader (target));
+	    String line ="";
+	    while( ( line = reader.readLine() ) != null ) {
+	        System.out.println(line);
+	    }
+	    reader.close();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		*/
+
+		DFSClientThread dct = this.putFileOnDFS(target.toString());
+		dct.start();
+		
 		
 		//result = "Juice Complete".getBytes();
+		//System.out.println(result);
 		return result.getBytes();
 		
 	}
 	
 	//retrieve the file needed directly from the master node
 	private void getFileFromMaster(String filename) {
+		//System.out.println(filename);
 		if(!this.checkLocalFilename(filename)) {
+			System.out.println(filename);
 			byte[] command = FileServerProtocol.formCommand("get", filename, true, "".getBytes());
 			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getIpAddress();
 			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getMembershipList().getMaster()).getFilePortNumber();

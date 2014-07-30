@@ -53,13 +53,13 @@ public class GossipListenThread extends Thread {
 				
 				//needs to be able to take 1 inputs
 				//1.  membership list
-				if(temp instanceof MembershipList) {
-					MembershipList ml = (MembershipList) temp;				
-					//spin up a new thread to merge the two lists
-					MergeMembershipListThread mmlt = new MergeMembershipListThread(ml, this.gs);
-					//System.out.println(this.gs.getMembershipList().toString());
-					mmlt.start();
-				}
+				MembershipList ml = (MembershipList) temp;				
+				//spin up a new thread to merge the two lists
+				MergeMembershipListThread mmlt = new MergeMembershipListThread(ml, this.gs);
+				//System.out.println(this.gs.getMembershipList().toString());
+				mmlt.start();
+				bis.close();
+				in.close();
 
 			}      	
 			catch(SocketException e) {

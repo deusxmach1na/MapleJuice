@@ -3,7 +3,7 @@
 
 #contactserver = server,gossipPort
 contactserver=localhost,6665
-timeFail=2000
+timeFail=3000
 timeGossip=500
 timeUpdateHeartbeat=500
 timeUpdateList=900

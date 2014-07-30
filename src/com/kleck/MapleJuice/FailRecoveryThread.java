@@ -2,9 +2,11 @@ package com.kleck.MapleJuice;
 
 public class FailRecoveryThread extends Thread {
 	private GroupServer gs;
+	private String failedProcess;
 	
-	public FailRecoveryThread(GroupServer gs) {
+	public FailRecoveryThread(GroupServer gs, String failedProcess) {
 		this.gs = gs;
+		this.failedProcess = failedProcess;
 	}
 	
 	public void run() {
@@ -16,7 +18,7 @@ public class FailRecoveryThread extends Thread {
 		//System.out.println("***********************");
 		//System.out.println("** Master Selection took " + (masterTime - currentTime) + " milliseconds.**");
 		//System.out.println("***********************");
-		this.gs.replicateFiles("");
+		this.gs.replicateFiles(failedProcess);
 		
 	}
 

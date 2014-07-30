@@ -278,11 +278,11 @@ public class GroupServer extends Thread {
 	}
 
 
-	public void replicateFiles(String patternToConsider) {
+	public void replicateFiles(String failedProcess) {
 		//talk to your file server and tell it to rebalance
 		//just re-use a client thread
 		DFSClientThread dct = new DFSClientThread(this.ipAddress, this.filePortNumber, "reb none", 
-				FileServerProtocol.formCommand("reb", "none", true, patternToConsider.getBytes()));
+				FileServerProtocol.formCommand("reb", "none", true, failedProcess.getBytes()));
 		dct.start();
 	}
 }

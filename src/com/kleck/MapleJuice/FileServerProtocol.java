@@ -55,12 +55,7 @@ public class FileServerProtocol {
 			result = this.delete(filename, isFirst);
 		}
 		else if(command.trim().equals("reb")) {
-			if(this.filename.equals("")) {
-				result = this.rebalance("###nothingtolookfor###");
-			}
-			else {
-				result = this.rebalance(this.filename);
-			}
+			result = this.rebalance(this.filename);
 		}
 		else if(command.trim().equals("find")) {
 			result = this.find(this.filename);
@@ -491,7 +486,7 @@ public class FileServerProtocol {
 
 	//FAILURE DETECTED
 	//rebalance system
-	public byte[] rebalance(String filePatternToConsider) {
+	public byte[] rebalance(String failedProcess) {
 		//pick a file
 		//then make sure there are at least replicationFactor copies
 		byte[] result = null;
@@ -500,14 +495,12 @@ public class FileServerProtocol {
 		File folder = new File(".");
 		File[] listOfFiles = folder.listFiles();
 		int replicationFactor = Integer.parseInt(this.fs.getGs().getProps().getProperty("replicationfactor"));
+		boolean stop = false;
 		
 		for(int i=0;i<listOfFiles.length;i++) {
 			//get a list of all files
 			//if it has PART_ in it then see how many times it's replicated
-			if(listOfFiles[i].isFile() && (listOfFiles[i].toString().contains("PART_") ||
-											listOfFiles[i].toString().contains(filePatternToConsider))
-											&& !(listOfFiles[i].toString().contains("MAPCOMPLETE_") ||
-												listOfFiles[i].toString().contains("JUICOMPLETE"))) {
+			if(listOfFiles[i].isFile() && (listOfFiles[i].toString().contains("PART_")) && !stop) {
 				//turn it into a byte array
 				Path path = Paths.get(listOfFiles[i].toString());
 				byte[] file = null;
@@ -553,6 +546,12 @@ public class FileServerProtocol {
 						    if (len > 0) {
 								//System.out.println("rebalance no put");
 						    	replicationCount ++;
+						    	//break out of here if 
+						    	//you hear back from the failedProcess
+						    	if(potentialProcess.equals(failedProcess)) {
+						    		stop = true;
+						    		break;
+						    	}
 						    }
 						    else {
 						    	//put the file

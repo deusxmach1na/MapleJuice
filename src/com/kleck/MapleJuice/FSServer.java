@@ -22,7 +22,7 @@ public class FSServer {
 		this.gs.setFs(this);
 		try {
 			//initialize server socket
-			this.serverSocket = new ServerSocket(this.portNumber);
+			this.serverSocket = new ServerSocket(this.portNumber, 200);
 			//create a new thread when client connects
 			while(true) {
 				Socket sock = serverSocket.accept();

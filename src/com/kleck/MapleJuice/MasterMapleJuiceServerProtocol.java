@@ -15,6 +15,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MasterMapleJuiceServerProtocol {
 	private FSServer fs;
@@ -189,8 +193,9 @@ public class MasterMapleJuiceServerProtocol {
 		    }
 		}
 		
-		//should have all the files group and concatenate by key
-		List<String> keyFiles = this.groupFilesByKey(listOfFinishedFiles);
+		//should have all the files split them by key now
+		List<String> keyFiles = this.splitFiles(listOfFinishedFiles);
+		//List<String> keyFiles = this.groupFilesByKey(listOfFinishedFiles);
 		//put them on dfs quick
 		this.putFilesOnDFSByList(keyFiles);
 		
@@ -206,6 +211,7 @@ public class MasterMapleJuiceServerProtocol {
 	}
 
 
+
 	//JUICER
 	//needs to do the following
 	//1. give 1 juicer task per num_juicers until all files are consumed
@@ -218,7 +224,8 @@ public class MasterMapleJuiceServerProtocol {
 		//commandOptions.size == 6
 		List<String> options = this.parseCommandOptions(this.commandOptions);
 		List<String> filesToJuice = new ArrayList<String>();
-		HashMap<String, String> fileCompletionStatus = new HashMap<String,String>();
+		//HashMap<String, String> fileCompletionStatus = new HashMap<String,String>();
+		HashMap<String, String> juiceCompletionStatus = new HashMap<String,String>();
 		List<String> listOfFinishedFiles = new ArrayList<String>();
 		
 		this.jarFile = options.get(2);
@@ -234,10 +241,19 @@ public class MasterMapleJuiceServerProtocol {
 		filesToJuice = this.searchDFSByPattern(this.prefix);
 		//System.out.println(filesToJuice);
 		
+		String proposedProcess = this.fs.getGs().getSuccessor();
+		
+		while(juiceCompletionStatus.size() < this.numJuices) {
+			if(!juiceCompletionStatus.containsKey(proposedProcess) && !proposedProcess.equals(this.fs.getGs().getPriority())) {
+				juiceCompletionStatus.putIfAbsent(proposedProcess, "Incomplete");
+			}
+			proposedProcess = this.fs.getGs().getMembershipList().getMember(proposedProcess).getSuccessor();
+		}
+		/*
 		for(int i=0;i<filesToJuice.size();i++) {
 			fileCompletionStatus.put(filesToJuice.get(i), "Incomplete");
 		}
-		
+	
 		//do this until all files are juiced
 		while(fileCompletionStatus.values().contains("Incomplete")) {
 			//for 1 through numJuices send fileToJuice to a juicer
@@ -290,7 +306,93 @@ public class MasterMapleJuiceServerProtocol {
 					//if any processes have left remove them from the allowed process
 				}
 			}
+			*/
 			
+			//go through list of files to juice
+			//get num juices and divide the files up
+			ConcurrentHashMap<String, List<String>> juiceTasks = new ConcurrentHashMap<String, List<String>>();
+			List<String> processesAllowed = new ArrayList<String>(juiceCompletionStatus.keySet());
+			Random rando = new Random();
+			for(int i=0;i<filesToJuice.size();i++) {
+				proposedProcess = processesAllowed.get(rando.nextInt(processesAllowed.size()));
+				if(juiceTasks.keySet().contains(proposedProcess)) {
+					List<String> tempList = new ArrayList<String>(juiceTasks.get(proposedProcess));
+					tempList = juiceTasks.get(proposedProcess);
+					tempList.add(filesToJuice.get(i));
+					juiceTasks.put(proposedProcess, tempList);
+				}
+				else {
+					List<String> tempList = new ArrayList<String>();
+					tempList.add(filesToJuice.get(i));
+					juiceTasks.put(proposedProcess, tempList);
+				}
+				System.out.println(juiceTasks.get(proposedProcess));
+			}
+			
+
+			//keep going until all juices are complete
+			while(juiceCompletionStatus.containsValue("Incomplete")) {
+				List<String> juiceTheseFiles = new ArrayList<String>();
+				HashMap<String, DFSClientThread> juiceThreads = new HashMap<String, DFSClientThread>();
+				//merge a juice tasks key files
+				for(String process:juiceCompletionStatus.keySet()) {
+					if(juiceCompletionStatus.get(process).equals("Incomplete")) {
+						//System.out.println(juiceTasks.get(process).toString());
+						this.mergeIntermediateFiles(juiceTasks.get(process), "JUICEME_" + process);
+						juiceTheseFiles.add("JUICEME_" + process);
+					}
+				}
+				//put the new file on dfs
+				this.putFilesOnDFSByList(juiceTheseFiles);
+				
+				//send juice request
+				for(int j=0;j<processesAllowed.size();j++) {
+					String ipAddress = this.fs.getGs().getMembershipList().getMember(processesAllowed.get(j)).getIpAddress();
+					int portNumber = this.fs.getGs().getMembershipList().getMember(processesAllowed.get(j)).getFilePortNumber();
+					//System.out.println("master sending maple command to worker" + portNumber);
+					LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_JUICE_TASK_SENT#" + processesAllowed.get(j));
+					lt.start();	 
+					byte[] command = this.formMJCommand("juice none", this.jarFile, juiceTheseFiles.get(j), this.destFile);
+					juiceThreads.put(processesAllowed.get(j), new DFSClientThread(ipAddress, portNumber, "juice none", command));
+					juiceThreads.get(processesAllowed.get(j)).start();
+				}
+
+			    //wait for all threads to return
+			    for(String s:juiceThreads.keySet()){
+			    	try {
+			    		juiceThreads.get(s).join();
+						LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#MASTER_JUICE_TASK_FINISHED#" + s);
+						lt.start();	 
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+			    }
+			    
+			    //get completed file names
+			    //System.out.println("here" + mapleThreads.keySet());
+			    for(String key: juiceThreads.keySet()){
+				    String filesOnDFS = "";
+			    	//System.out.println(mapleThreads.get(key).getResponse());
+			    	//if the response does not start with ERROR: then 
+			    	if(juiceThreads.get(key).getResponse().contains("ERROR")) {
+			    		//do nothing so it can redo the maple
+			    	}
+			    	else {
+			    		juiceCompletionStatus.put(key, "Completed");
+			    		filesOnDFS += " " + juiceThreads.get(key).getResponse();		    
+					    //reuse parse command options and add finished file names to array
+			    		for(String s:parseCommandOptions(filesOnDFS)) {
+			    			if(!s.equals("")) {
+			    				listOfFinishedFiles.add(s);
+			    				//System.out.println(s);
+			    			}
+			    		}
+			    	}
+			    }
+					
+			}
+			
+			/*
 			//wait for processes to finish and see if they finished correctly
 		    //wait for all threads to return
 		    for(String s:juiceThreads.keySet()){
@@ -319,12 +421,14 @@ public class MasterMapleJuiceServerProtocol {
 		    		for(String s:parseCommandOptions(filesOnDFS)) {
 		    			if(!s.equals("")) {
 		    				listOfFinishedFiles.add(s);
+		    				//System.out.println(s);
 		    			}
 		    		}
 		    	}
 		    }
 			
 		}
+		*/
 		
 		//stitch the files back together in Key order
 		this.mergeIntermediateFiles(listOfFinishedFiles, this.destFile);
@@ -399,6 +503,43 @@ public class MasterMapleJuiceServerProtocol {
 			result.add(this.prefix + "_" + s);
 		}
 		return result;
+	}
+
+	//take the files the mappers gave you and print out a new list of files
+	//broken down by key
+	private List<String> splitFiles(List<String> listOfFinishedFiles) {
+		List<String> keyFiles = new ArrayList<String>();
+		ConcurrentHashMap<String, PrintWriter> keys = new ConcurrentHashMap<String, PrintWriter>();
+		this.getFilesFromDFSByList(listOfFinishedFiles);
+		
+		try {
+			//go through each file
+			for(int i=0;i<listOfFinishedFiles.size();i++) {
+				FileReader fileReader = new FileReader(listOfFinishedFiles.get(i));
+				BufferedReader br = new BufferedReader(fileReader);
+				String line = "";
+				while ((line = br.readLine()) != null) {
+				    String key = line.split(",")[0].replace("(", "").trim();
+					if(!keys.contains(key)) {
+						keys.putIfAbsent(key, new PrintWriter(this.prefix + "_" + key));
+						keyFiles.add(this.prefix + "_" + key);
+					}
+					keys.get(key).println(line);
+					//System.out.println(line);
+				}
+				br.close();		
+			}
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		for(String s:keys.keySet()) {
+			keys.get(s).close();
+		}
+		
+		
+		return keyFiles;
 	}
 
 	//merges intermediate files after mapper is done and after juicer
@@ -512,17 +653,20 @@ public class MasterMapleJuiceServerProtocol {
 	
 	//gets the files from the DFS
 	private void getFilesFromDFSByList(List<String> filesToMerge) {
-		List<DFSClientThread> threads = new ArrayList<DFSClientThread>();
+		ExecutorService ex = Executors.newFixedThreadPool(20);
+		//List<DFSClientThread> threads = new ArrayList<DFSClientThread>();
 		for(int i=0;i<filesToMerge.size();i++) {
 			String s = filesToMerge.get(i);
 			//System.out.println(s);
 			byte[] command = this.formFileCommand("getserv", s, true, "".getBytes());
 			String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getIpAddress();
 			int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getFilePortNumber();
-			threads.add(new DFSClientThread(ipAddress, portNumber, "getserv " + s, command));
-			threads.get(i).start();
+			ex.execute(new DFSClientThread(ipAddress, portNumber, "getserv " + s, command));
+			//threads.add(new DFSClientThread(ipAddress, portNumber, "getserv " + s, command));
+			//threads.get(i).start();
 		}
 		
+		/*
 		//wait for threads to come back
 	    for(int i=0;i<threads.size();i++){
 	    	try {
@@ -531,11 +675,17 @@ public class MasterMapleJuiceServerProtocol {
 				e.printStackTrace();
 			}
 	    }
+	    */
+		ex.shutdown();
+		while(!ex.isTerminated()) {
+			
+		}
 	}
 	
 	//gets the files from the DFS
 	private void putFilesOnDFSByList(List<String> filesToPut) {
-		List<DFSClientThread> threads = new ArrayList<DFSClientThread>();
+		ExecutorService ex = Executors.newFixedThreadPool(20);
+		//List<DFSClientThread> threads = new ArrayList<DFSClientThread>();
 		for(int i=0;i<filesToPut.size();i++) {
 			try {
 				String s = filesToPut.get(i);
@@ -545,13 +695,14 @@ public class MasterMapleJuiceServerProtocol {
 				byte[] command = this.formFileCommand("put", s, true, data);
 				String ipAddress = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getIpAddress();
 				int portNumber = this.fs.getGs().getMembershipList().getMember(this.fs.getGs().getProcessId()).getFilePortNumber();
-				threads.add(new DFSClientThread(ipAddress, portNumber, "put none", command));
-				threads.get(i).start();
+				//threads.add(new DFSClientThread(ipAddress, portNumber, "put none", command));
+				//threads.get(i).start();
+				ex.execute(new DFSClientThread(ipAddress, portNumber, "put none", command));
 			} catch (IOException e) {
 				e.printStackTrace();
 			}	
 		}
-		
+		/*
 		//wait for threads to come back
 	    for(int i=0;i<threads.size();i++){
 	    	try {
@@ -560,6 +711,11 @@ public class MasterMapleJuiceServerProtocol {
 				e.printStackTrace();
 			}
 	    }
+	    */
+		ex.shutdown();
+		while(!ex.isTerminated()) {
+			
+		}
 	}
 	
 	private void cleanUpLocal() {
