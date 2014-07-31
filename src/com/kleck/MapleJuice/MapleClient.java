@@ -91,12 +91,18 @@ public class MapleClient {
 			//maple juice commands
 			else if(command.split(" ")[0].equals("maple")) {
 				//System.out.println("maple sent");
+				//long startTime = System.currentTimeMillis();
 				spinUpThreads(this.formMJCommand("maple master", command), "maple master");
+				//long stopTime = System.currentTimeMillis();
+				//System.out.println("Maple took " + (stopTime - startTime) + " milliseconds");
 			}
 			//maple juice commands
 			else if(command.split(" ")[0].equals("juice")) {
 				//System.out.println("maple sent");
+				//long startTime = System.currentTimeMillis();
 				spinUpThreads(this.formMJCommand("juice master", command), "juice master");
+				//long stopTime = System.currentTimeMillis();
+				//System.out.println("Juice took " + (stopTime - startTime) + " milliseconds");
 			}
 		}	
 	}
@@ -164,6 +170,25 @@ public class MapleClient {
 				e.printStackTrace();
 			}
 	    }
+	    
+	    
+	    //4th credit!!!!
+	    //brute force method of re-issuing the client command if the
+	    //method does not complete
+	    if(command.split(" ")[0].equals("maple") || command.split(" ")[0].equals("juice")) {
+		    boolean retry = true;
+		    for(int i=0;i<sends.size();i++){
+		    	if((sends.get(i).getResponse().equals("Maple Master Complete") || sends.get(i).getResponse().equals("Juice Master Complete"))) {
+		    		//System.out.println("dont retry");
+		    		retry = false;
+		    	}
+		    }
+		    
+		    if(retry) {
+		    	this.spinUpThreads(bs, command);
+		    }
+	    }
+	    
 	}
 	
 	//main

@@ -67,8 +67,12 @@ public class MapleJuiceServerProtocol {
 			this.jarFile = new String(Arrays.copyOfRange(header, 16, 112)).trim();
 			this.filename = new String(Arrays.copyOfRange(header, 112, 312)).trim();
 			this.interFile = new String(Arrays.copyOfRange(header, 312, 512)).trim();
+			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_MAPTASK_STARTED#" + this.filename);
+			lt.start();	 
 			//System.out.println(jarFile + filename + interFile);
 			result = this.processMaple();
+			lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_MAPTASK_FINISHED#" + this.filename);
+			lt.start();	 
 		}
 		else if(command.trim().equals("juice none")) {
 			//if you are not the master just do what the master says
@@ -76,7 +80,11 @@ public class MapleJuiceServerProtocol {
 			this.jarFile = new String(Arrays.copyOfRange(header, 16, 112)).trim();
 			this.filename = new String(Arrays.copyOfRange(header, 112, 312)).trim();
 			this.interFile = new String(Arrays.copyOfRange(header, 312, 512)).trim();
+			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_JUICETASK_STARTED#" + this.filename);
+			lt.start();	 
 			result = this.processJuice();
+			lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_JUICETASK_FINISHED#" + this.filename);
+			lt.start();	 
 		}
 		
 		return result;
@@ -193,8 +201,6 @@ public class MapleJuiceServerProtocol {
 			newFile = this.filename + "_DELIM_" + this.interFile;
 			pw = new PrintWriter(newFile);
 			//System.out.println("java -jar " + this.jarFile + " " + this.filename);
-			LoggerThread lt = new LoggerThread(this.fs.getGs().getProcessId(), "#WORKER_JUICETASK_FILE#" + newFile);
-			lt.start();	 
 			Process proc = Runtime.getRuntime().exec("java -jar " + this.jarFile + " " + this.filename);
 			BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
 			BufferedReader err = new BufferedReader(new InputStreamReader(proc.getErrorStream()));

@@ -1,31 +1,43 @@
 Need Java 1.7 or higher to run.  Developed using Java 1.8
-Steps to run Distributed File System locally:
+Steps to run MapleJuice locally:
 1. Update settings.prop with the contact server and the contact server gossip port.
 	-Update settings.prop for all servers in the cluster.  Needs the hostname, gossipPort, and fileOperationsPort.
 	-Can set replicationfactor and shardsize too.
-2. Move DFS.jar and settings.prop to the folders you want to run the servers from.  
-	-Note: the file operations will put, get, and delete files from the same folder as the jar.
+2. Move MapleJuice.jar and settings.prop to the folders you want to run the servers from.  
+	-Note: the DFS file operations will put, get, and delete files from the same folder as the jar.
 3. Issue command to start server:
-	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer <gossipPort> <fileOperationsPort> <isContact>
-	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer 6665 6666 true
-	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer 6667 6668 false
-	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer 6669 6670 false
-	-java -cp DFS.jar com.kleck.DistributedFileSystem.FSServer 6671 6672 false
-4. Copy DFS.jar and settings.prop to the folder you wish to run the client on. 
+	-java -cp MapleJuice.jar com.kleck.DistributedFileSystem.FSServer <gossipPort> <fileOperationsPort> <isContact>
+	-java -cp MapleJuice.jar com.kleck.MapleJuice.FSServer 6665 6666 true
+	-java -cp MapleJuice.jar com.kleck.MapleJuice.FSServer 6667 6668 false
+	-java -cp MapleJuice.jar com.kleck.MapleJuice.FSServer 6669 6670 false
+	-java -cp MapleJuice.jar com.kleck.MapleJuice.FSServer 6671 6672 false
+4. Copy MapleJuice.jar and settings.prop to the folder you wish to run the client on. 
 5. Create a folder (or copy it) in the client folder called FromDFS.  This will store results from the get operations.
 6. Run the client using this:
-	-java -cp DFS.jar com.kleck.DistributedFileSystem.DFSClient
-7. Following commands are enable:
+	-java -cp MapleJuice.jar com.kleck.MapleJuice.MapleClient
+7. Following commands are enabled:
 	-put <localfilename> <sdfsfilename>
 	-get <sdfsfilename> <localfilename>
 	-delete <sdfsfilename>
+	-maple <maple_jar> <intermediate_filename_prefix> <file1> ... <filem>
+	-juice <juice_jar> <num_juices> <intermediate_filename_prefix> <output_file>
+8. To run a maple command the user is required to put the files on the dfs first. 
+
+Here is an example of the commands needed to run word count on constitution.txt and declaration.txt:
+	-put Maple.jar mjar
+	-put Juice.jar jjar
+	-put declaration.txt dec
+	-put constitution.txt con
+	-maple mjar americandocs dec con
+	-juice jjar 2 americandocs aafinalwordcount
+	
 -Steps to run remotely should be the same however, this will not run on the EWS since it only has Java 1.6.
 
 Other Helpful Commands:
 print - issue 'print' to the server and you will get its current membership list
 stop - issue 'stop' to the server to mimic the server leaving (closes connections too)
-quit - issue 'quit' to the client to leave the sdfs> promptm
-
+quit - issue 'quit' to the client to leave the sdfs> prompt
+Please carefully type commands since I do not have a lot of command error checking.
 
 
 Tips for querying logs:
@@ -46,6 +58,16 @@ Here are the keywords to search for:
 	#PUT_FILE# = process put the file indicated
 	#GET_FILE# = process retrieved the file
 	#DELETE_FILE# = process deleted the file
+	#MASTER_MAP_JOB_STARTED# - the master has started the map process
+	#WORKER_MAPTASK_STARTED# - the worker has started a map task
+	#WORKER_MAPTASK_FINISHED# - the worker has completed a map task
+	#MASTER_MAP_JOB_FINISHED# - the master has completed the map process
+	#MASTER_JUICE_JOB_STARTED# - the master has started the juice process
+	#MASTER_GETTING_FILES_TO_JUICE# - the master is collecting files to juice from the DFS
+	#WORKER_JUICE_TASK_SENT# - the master has sent the juice task to the master
+	#WORKER_JUICETASK_STARTED# - the worker has started the juice task
+	#WORKER_JUICETASK_FINISHED# - the worker has completed the juice task
+	#MASTER_JUICE_JOB_FINISHED# - the master has finished the juice job
 	
 
 
